@@ -741,52 +741,42 @@ if (-not $mcMatch) {
             } catch {
                 Write-Output ('    GetList failed: ' + $_.Exception.Message)
             }
-            $variants = @()
-            $variants += @{ Label = 'det'; SearchType = $stSearchType; Condition = $stCondition }
-            if ($sensorId -and $stSearchType -ne 'SensorID' -and $stCondition -ne $sensorId) {
-                $variants += @{ Label = 'SID'; SearchType = 'SensorID'; Condition = $sensorId }
+            $sf = @{}
+            foreach ($k in $mcFields.Keys) {
+                if ($k -eq 'token') { continue }
+                $sf[$k] = [System.Net.WebUtility]::HtmlDecode([string]$mcFields[$k])
             }
-            $done = $false
-            foreach ($v in $variants) {
-                if ($done) { break }
-                if (-not $v.Condition) { continue }
-                $sf = @{}
-                foreach ($k in $mcFields.Keys) {
-                    if ($k -eq 'token') { continue }
-                    $sf[$k] = [System.Net.WebUtility]::HtmlDecode([string]$mcFields[$k])
+            $sf['Station'] = $st.Id
+            $sf['SearchType'] = $stSearchType
+            $sf['Condition'] = $stCondition
+            $sf['IMGType'] = ''
+            $sf['starttime'] = '06/01/2026 00:00'
+            $sf['endtime'] = '08/08/2026 23:59'
+            Write-Output ('    query: SearchType=' + $stSearchType + ' Condition=' + $stCondition)
+            $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
+            $sb = New-Object System.Text.StringBuilder
+            foreach ($k in $sf.Keys) {
+                [void]$sb.Append('--' + $boundary + "`r`n")
+                [void]$sb.Append('Content-Disposition: form-data; name="' + $k + '"' + "`r`n`r`n")
+                [void]$sb.Append([string]$sf[$k] + "`r`n")
+            }
+            [void]$sb.Append('--' + $boundary + "--`r`n")
+            try {
+                $stResp = Invoke-WebRequest -Uri ($mcOrigin + '/ReportPortal/Search') -Method Post -Body $sb.ToString() -ContentType ('multipart/form-data; boundary=' + $boundary) -WebSession $session -UseBasicParsing -TimeoutSec 120
+                $stHtml = $stResp.Content
+                $stFile = Join-Path $BASE_DIR ('portal_mcimg_search_' + $stIdx + '.html')
+                $stHtml | Out-File -FilePath $stFile -Encoding UTF8
+                $hrefs = @([regex]::Matches($stHtml, 'href="([^"]+)"', 'IgnoreCase') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notmatch '^javascript:|^#' } | Sort-Object -Unique)
+                $imgCount = ($hrefs | Where-Object { $_ -match '\.(?:jpg|jpeg|png)' }).Count
+                Write-Output ('    status=' + [int]$stResp.StatusCode + ' length=' + $stHtml.Length + ' imageLinks=' + $imgCount + ' saved: ' + $stFile)
+                $vis = ($stHtml -replace '<[^>]+>', ' ') -replace '\s+', ' '
+                if ($vis.Length -gt 800) { $vis = $vis.Substring(0, 800) }
+                Write-Output ('    preview: ' + $vis)
+                if ($hrefs.Count -gt 0) {
+                    Write-Output ('    links: ' + ($hrefs -join ' | '))
                 }
-                $sf['Station'] = $st.Id
-                $sf['SearchType'] = $v.SearchType
-                $sf['Condition'] = $v.Condition
-                $sf['IMGType'] = ''
-                $sf['starttime'] = '06/01/2026 00:00'
-                $sf['endtime'] = '08/08/2026 23:59'
-                Write-Output ('    query ' + $v.Label + ': SearchType=' + $v.SearchType + ' Condition=' + $v.Condition)
-                $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
-                $sb = New-Object System.Text.StringBuilder
-                foreach ($k in $sf.Keys) {
-                    [void]$sb.Append('--' + $boundary + "`r`n")
-                    [void]$sb.Append('Content-Disposition: form-data; name="' + $k + '"' + "`r`n`r`n")
-                    [void]$sb.Append([string]$sf[$k] + "`r`n")
-                }
-                [void]$sb.Append('--' + $boundary + "--`r`n")
-                try {
-                    $stResp = Invoke-WebRequest -Uri ($mcOrigin + '/ReportPortal/Search') -Method Post -Body $sb.ToString() -ContentType ('multipart/form-data; boundary=' + $boundary) -WebSession $session -UseBasicParsing -TimeoutSec 120
-                    $stHtml = $stResp.Content
-                    $stFile = Join-Path $BASE_DIR ('portal_mcimg_search_' + $stIdx + '_' + $v.Label + '.html')
-                    $stHtml | Out-File -FilePath $stFile -Encoding UTF8
-                    $imgCount = [regex]::Matches($stHtml, 'href="http://[^"]*\.(?:jpg|jpeg|png)(?:[?"][^"]*)?"', 'IgnoreCase').Count
-                    Write-Output ('    status=' + [int]$stResp.StatusCode + ' length=' + $stHtml.Length + ' images=' + $imgCount + ' saved: ' + $stFile)
-                    if ($imgCount -gt 0) {
-                        $done = $true
-                    } else {
-                        $vis = ($stHtml -replace '<[^>]+>', ' ') -replace '\s+', ' '
-                        if ($vis.Length -gt 150) { $vis = $vis.Substring(0, 150) }
-                        Write-Output ('    preview: ' + $vis)
-                    }
-                } catch {
-                    Write-Output ('    query ' + $v.Label + ' failed: ' + $_.Exception.Message)
-                }
+            } catch {
+                Write-Output ('    station search failed: ' + $_.Exception.Message)
             }
         }
     } catch {
