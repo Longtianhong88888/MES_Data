@@ -154,10 +154,34 @@ foreach ($fc in $framesToScan) {
 }
 $uniqueHrefs = $allHrefs | Where-Object { $_ -ne '#' } | Sort-Object -Unique
 Write-Output ('Unique non-empty hrefs: ' + $uniqueHrefs.Count)
-$fileLinks = $uniqueHrefs | Where-Object { $_ -match '\.(pdf|xls|xlsx|zip|rar|csv|doc|docx|txt|jpg|png)(\?|$)' -or $_ -match 'download|attach|getfile|file=' }
-Write-Output ('Download-like links: ' + $fileLinks.Count)
-if ($fileLinks.Count -gt 0) {
-    $fileLinks | ForEach-Object { Write-Output ('  - ' + $_) }
+$dlHrefs = $uniqueHrefs | Where-Object { $_ -match '\.(pdf|xls|xlsx|zip|rar|csv|doc|docx|txt|dat)(\?|$)' -or $_ -match 'download|attach|getfile|file=' }
+Write-Output ('Download-like page links: ' + $dlHrefs.Count)
+if ($dlHrefs.Count -gt 0) {
+    $dlHrefs | ForEach-Object { Write-Output ('  - ' + $_) }
+}
+
+# ---- Step 6: crawl each download page and inspect its content ----
+$pageIndex = 0
+foreach ($dl in $dlHrefs) {
+    $pageIndex++
+    if ($pageIndex -gt 15) { break }
+    try {
+        $absUrl = (New-Object System.Uri($base, $dl)).AbsoluteUri
+        Write-Output ('Opening download page ' + $pageIndex + ': ' + $absUrl)
+        $dResp = Invoke-WebRequest -Uri $absUrl -WebSession $session -UseBasicParsing
+        $dHtml = $dResp.Content
+        $dFile = Join-Path $BASE_DIR ('vtq_' + $pageIndex + '.html')
+        $dHtml | Out-File -FilePath $dFile -Encoding UTF8
+        $fileHrefs = [regex]::Matches($dHtml, 'href\s*=\s*["'']([^"'']+\.(?:pdf|xls|xlsx|zip|rar|csv|doc|docx|txt|dat)(?:\?[^"'']*)?)["'']', 'IgnoreCase') | ForEach-Object { $_.Groups[1].Value }
+        $submitButtons = [regex]::Matches($dHtml, '<input\b[^>]*\btype\s*=\s*["''](?:submit|button)["''][^>]*>', 'IgnoreCase')
+        $formFields = [regex]::Matches($dHtml, '<input\b[^>]*>', 'IgnoreCase')
+        Write-Output ('  status=' + [int]$dResp.StatusCode + ' length=' + $dHtml.Length + ' fileLinks=' + $fileHrefs.Count + ' buttons=' + $submitButtons.Count + ' inputs=' + $formFields.Count)
+        foreach ($fh in ($fileHrefs | Select-Object -First 10)) {
+            Write-Output ('    FILE: ' + $fh)
+        }
+    } catch {
+        Write-Output ('  failed: ' + $_.Exception.Message)
+    }
 }
 Write-Output 'Done.'
 exit 0
