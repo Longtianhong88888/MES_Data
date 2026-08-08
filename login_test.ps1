@@ -569,6 +569,7 @@ if (-not $acfMatch) {
             @{ Id = 'acfunloadbondnewdatabak'; Label = 'ACF下料機' },
             @{ Id = 'acfmaindatanewbak'; Label = 'ACF主機' }
         )
+        $sensorId = ''
         $dlDir = Join-Path $BASE_DIR 'downloads'
         New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
         $mcIdx = 0
@@ -610,6 +611,14 @@ if (-not $acfMatch) {
                 $sHtml | Out-File -FilePath $sFile -Encoding UTF8
                 Write-Output ('  status=' + [int]$sResp.StatusCode + ' length=' + $sHtml.Length + ' saved: ' + $sFile)
 
+                if ($mc.Id -eq 'acfunloadbondnewdatabak') {
+                    $sidCands = @([regex]::Matches($sHtml, '(?i)<p>\s*((?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*[0-9])[A-Z0-9]{10,16})\s*</p>') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+                    if ($sidCands.Count -gt 0) {
+                        $sensorId = $sidCands[0]
+                        Write-Output ('  sensorID: ' + $sensorId)
+                    }
+                }
+
                 # download the generated Excel export for this MC type
                 $xlsm = [regex]::Match($sHtml, 'href="([^"]*\.xlsx[^"]*)"', 'IgnoreCase')
                 if ($xlsm.Success) {
@@ -647,6 +656,85 @@ if (-not $acfMatch) {
             }
         } catch {}
         Write-Output ('  ACF search failed: ' + $errMsg)
+    }
+}
+
+# ---- Step 11: MC IMG UpLoadInfo per-station queries ----
+Write-Output 'Step 11: MC IMG UpLoadInfo queries...'
+$imgCondition = $sn
+if ($sensorId) {
+    $imgCondition = $sensorId
+    Write-Output ('  using sensorID: ' + $sensorId)
+}
+$mcMatch = $null
+foreach ($fc in $framesToScan) {
+    $m = [regex]::Match($fc, "openPage\(\s*\d+\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*\)[^>]*>\s*MC IMG UpLoadInfo", 'IgnoreCase')
+    if ($m.Success) { $mcMatch = $m; break }
+}
+if (-not $mcMatch) {
+    Write-Output '  MC IMG UpLoadInfo not found in the menu.'
+} else {
+    $mcUrl = $mcMatch.Groups[1].Value
+    $mcOrigin = (New-Object System.Uri($mcUrl)).GetLeftPart([System.UriPartial]::Authority)
+    $mcBody = 'p=' + $mcMatch.Groups[2].Value + '&p=' + $mcMatch.Groups[3].Value + '&p=' + $mcMatch.Groups[4].Value + '&userID=' + $mcMatch.Groups[5].Value
+    try {
+        $mcPage = Invoke-WebRequest -Uri $mcUrl -Method Post -Body $mcBody -ContentType 'application/x-www-form-urlencoded' -WebSession $session -UseBasicParsing
+        $mcFields = Get-FormFields $mcPage.Content
+
+        try {
+            $sendJson2 = '[{"Key":"Station","Parametertype":1,"Value":"cubepnpimguploadbak"},{"Key":"SearchType","Parametertype":1,"Value":null},{"Key":"Condition","Parametertype":3,"Value":null},{"Key":"IMGType","Parametertype":1,"Value":null},{"Key":"starttime","Parametertype":2,"Value":null},{"Key":"endtime","Parametertype":2,"Value":null}]'
+            $rpmJson2 = '{"ClassName":"MESReportTeamplate.TestReport.SMTAOIRepor","MethodName":"SearchType","SendParameters":' + $sendJson2 + ',"Othervalue":["' + $mcMatch.Groups[2].Value + '","' + $mcMatch.Groups[3].Value + '","' + $mcMatch.Groups[4].Value + '","' + $mcMatch.Groups[5].Value + '"]}'
+            $glBody2 = @{ Jsonstr = $rpmJson2 }
+            $gl2 = Invoke-WebRequest -Uri ($mcOrigin + '/ReportPortal/GetList') -Method Post -Body $glBody2 -WebSession $session -UseBasicParsing -TimeoutSec 60
+            Write-Output ('  MC IMG GetList raw: ' + $gl2.Content)
+        } catch {
+            Write-Output ('  MC IMG GetList failed: ' + $_.Exception.Message)
+        }
+
+        $mcStations = @(
+            @{ Id = 'cubepnpimguploadbak'; Label = 'CUBEPNP' },
+            @{ Id = 'aaimguploadbak'; Label = 'AA' },
+            @{ Id = 'LMimguploadbak'; Label = 'LM' },
+            @{ Id = 'aviimguploadbak'; Label = 'AVI' },
+            @{ Id = 'frtopimguploadbak'; Label = 'FRTOP' },
+            @{ Id = 'acfflipimguploadbak'; Label = 'ACFFlip' }
+        )
+        $stIdx = 0
+        foreach ($st in $mcStations) {
+            $stIdx++
+            Write-Output ('  station ' + $stIdx + ': ' + $st.Label + ' (' + $st.Id + ')')
+            $sf = @{}
+            foreach ($k in $mcFields.Keys) {
+                if ($k -eq 'token') { continue }
+                $sf[$k] = [System.Net.WebUtility]::HtmlDecode([string]$mcFields[$k])
+            }
+            $sf['Station'] = $st.Id
+            $sf['SearchType'] = 'SN'
+            $sf['Condition'] = $imgCondition
+            $sf['IMGType'] = ''
+            $sf['starttime'] = '06/01/2026 00:00'
+            $sf['endtime'] = '08/08/2026 23:59'
+            $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
+            $sb = New-Object System.Text.StringBuilder
+            foreach ($k in $sf.Keys) {
+                [void]$sb.Append('--' + $boundary + "`r`n")
+                [void]$sb.Append('Content-Disposition: form-data; name="' + $k + '"' + "`r`n`r`n")
+                [void]$sb.Append([string]$sf[$k] + "`r`n")
+            }
+            [void]$sb.Append('--' + $boundary + "--`r`n")
+            try {
+                $stResp = Invoke-WebRequest -Uri ($mcOrigin + '/ReportPortal/Search') -Method Post -Body $sb.ToString() -ContentType ('multipart/form-data; boundary=' + $boundary) -WebSession $session -UseBasicParsing -TimeoutSec 120
+                $stHtml = $stResp.Content
+                $stFile = Join-Path $BASE_DIR ('portal_mcimg_search_' + $stIdx + '.html')
+                $stHtml | Out-File -FilePath $stFile -Encoding UTF8
+                $imgCount = [regex]::Matches($stHtml, 'href="http://cma1[^"]*\.jpg[^"]*"', 'IgnoreCase').Count
+                Write-Output ('  status=' + [int]$stResp.StatusCode + ' length=' + $stHtml.Length + ' images=' + $imgCount + ' saved: ' + $stFile)
+            } catch {
+                Write-Output ('  station search failed: ' + $_.Exception.Message)
+            }
+        }
+    } catch {
+        Write-Output ('  MC IMG page failed: ' + $_.Exception.Message)
     }
 }
 Write-Output 'Done.'

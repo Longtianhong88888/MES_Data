@@ -28,6 +28,8 @@
 - Step 9 还会下载门户的共享 JS(`portal_js_*.js`),用于复刻 AJAX 查询逻辑
 - Step 10 用模组 SN 在 ACF Test Data 上发起真实搜索(multipart POST + Bearer token),
   结果保存为 `portal_search_acf.html`,用于提取 sensorID
+- Step 11 用 sensorID 在 MC IMG UpLoadInfo 上按站位查询图片
+  (`portal_mcimg_search_*.html`),确认各站位图片下载所需参数
 - Test data 页面支持日期/批號/SensorID 三种查询模式;脚本会自动切换到
   SensorID 模式并用 SN 查询,结果保存为 `testdata_sn_result.html`
 - 过程页面保存:`login_page.html`、`login_post_result.html`、`login_result.html`、
