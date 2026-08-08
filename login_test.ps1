@@ -1,4 +1,4 @@
-﻿# login_test.ps1 - auto-login + SN trace page discovery for the internal MES site
+﻿﻿# login_test.ps1 - auto-login + SN trace page discovery for the internal MES site
 # Zero-install: uses Windows built-in PowerShell 5.1 only.
 #
 # Flow:
@@ -311,7 +311,7 @@ if (-not $sn) {
                         $stations += [pscustomobject]@{ Station = $tds[0]; Time = $tds[1] }
                     } elseif ($tds.Count -eq 12 -and $tds[0] -eq $sn) {
                         $summaryRow = $tds
-                    } elseif ($tds.Count -eq 4 -and $tds[0] -match '^[A-Za-z]\d{4}-') {
+                    } elseif ($tds.Count -eq 4 -and $tds[0] -notmatch '(?i)耗材|使用站位|名称|批號' -and $tds[1] -ne '') {
                         $consumables += [pscustomobject]@{ Material = $tds[0]; Lot = $tds[1]; Name = $tds[2]; Station = $tds[3] }
                         if ($tds[2] -match '(?i)sensor|lens|vcm|stiffener|tape') {
                             $components += [pscustomobject]@{ Material = $tds[0]; Id = $tds[1]; Name = $tds[2]; Station = $tds[3] }
@@ -402,14 +402,15 @@ if ($idsToQuery.Count -eq 0) {
             foreach ($k in $fields2.Keys) { $body2[$k] = $fields2[$k] }
             $body2[$sensorField] = $qid
             $trig = ''
-            $btnM = [regex]::Match($mHtml, '<input\b[^>]*\btype\s*=\s*["'']submit["''][^>]*>', 'IgnoreCase')
-            if ($btnM.Success) {
-                $bn = [regex]::Match($btnM.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-                if ($bn.Success) { $trig = $bn.Groups[1].Value }
-            }
+            $pb = [regex]::Match($mHtml, '__doPostBack\(\s*["'']([^"'']*(?:search|query)[^"'']*)["'']', 'IgnoreCase')
+            if (-not $pb.Success) { $pb = [regex]::Match($mHtml, '__doPostBack\(\s*["'']([^"'']*(?:button|btn)[^"'']*)["'']', 'IgnoreCase') }
+            if ($pb.Success) { $trig = $pb.Groups[1].Value }
             if (-not $trig) {
-                $pb = [regex]::Match($mHtml, '__doPostBack\(\s*["'']([^"'']*(?:search|query|btn)[^"'']*)["'']', 'IgnoreCase')
-                if ($pb.Success) { $trig = $pb.Groups[1].Value }
+                $btnM = [regex]::Match($mHtml, '<input\b[^>]*\btype\s*=\s*["'']submit["''][^>]*>', 'IgnoreCase')
+                if ($btnM.Success) {
+                    $bn = [regex]::Match($btnM.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+                    if ($bn.Success) { $trig = $bn.Groups[1].Value }
+                }
             }
             $body2['__EVENTTARGET'] = $trig
             $body2['__EVENTARGUMENT'] = ''
