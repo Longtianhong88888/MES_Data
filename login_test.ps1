@@ -359,8 +359,8 @@ if (-not $sn) {
 # ---- Step 8: Test data SensorID query mode, using component IDs ----
 Write-Output 'Step 8: Test data SensorID queries...'
 $idsToQuery = @()
-if ($componentIds.Count -gt 0) { $idsToQuery = @($componentIds) }
-elseif ($sn) { $idsToQuery = @($sn) }
+if ($sn) { $idsToQuery = @($sn) }
+elseif ($componentIds.Count -gt 0) { $idsToQuery = @($componentIds) }
 
 if ($idsToQuery.Count -eq 0) {
     Write-Output '  no ID to query (no component IDs and no SN).'
