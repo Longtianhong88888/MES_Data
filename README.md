@@ -30,6 +30,16 @@
   结果保存为 `portal_search_acf.html`,用于提取 sensorID
 - Step 11 用 sensorID 在 MC IMG UpLoadInfo 上按站位查询图片
   (`portal_mcimg_search_*.html`),确认各站位图片下载所需参数
+
+## 图片下载(V 形分工)
+
+图片文件服务器(`cma1.fs.com` / `10.142.x`)只有公司台式机能直接访问,
+平行桌面 VM 无法直连。流程:
+
+1. VM 上运行 `login_test.ps1`,生成 `downloads\*images*.txt` 图片链接清单
+2. 把 `downloads` 目录拷到公司台式机(共享文件夹/U盘)
+3. 台式机上双击 `download_images.bat`,按清单批量下载图片到
+   `downloads\images`
 - Test data 页面支持日期/批號/SensorID 三种查询模式;脚本会自动切换到
   SensorID 模式并用 SN 查询,结果保存为 `testdata_sn_result.html`
 - 过程页面保存:`login_page.html`、`login_post_result.html`、`login_result.html`、
