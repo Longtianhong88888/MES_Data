@@ -1,0 +1,12 @@
+{
+  "login_url": "http://YOUR-SERVER:8081/login",
+  "username": "your-username",
+  "password": "your-password",
+  "login_form": {
+    "username_field": "username",
+    "password_field": "password",
+    "extra_fields": {
+      "rememberMe": "true"
+    }
+  }
+}
