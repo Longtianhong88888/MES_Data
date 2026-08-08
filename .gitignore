@@ -1,5 +1,5 @@
 config.json
 login.log
 login_result.html
-frame_result.html
+frame_*.html
 downloads/

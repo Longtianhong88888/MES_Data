@@ -90,22 +90,36 @@ $hasFrameset  = $html -match '<frameset'
 if ($hasFrameset) {
     Write-Output 'Result: main app frameset returned -> login looks SUCCESSFUL.'
 
-    # Follow-up: fetch the first frame with the same session to verify it really works.
-    $m = [regex]::Match($html, 'src\s*=\s*["'']([^"'']+)["'']')
-    if ($m.Success) {
+    # Verify the session by fetching each frame page (top/left/home) with the
+    # same session and checking whether the username appears in any of them.
+    $base = New-Object System.Uri($loginUrl)
+    $frameMatches = [regex]::Matches($html, '<frame\b[^>]*\bsrc\s*=\s*["''](?<src>[^"'']+)["'']', 'IgnoreCase')
+    Write-Output ('Frames found: ' + $frameMatches.Count)
+    $frameIndex = 0
+    $usernameFound = $false
+    foreach ($fm in $frameMatches) {
+        $frameIndex++
+        if ($frameIndex -gt 3) { break }
+        $src = $fm.Groups['src'].Value
+        $frameUri = New-Object System.Uri($base, $src)
+        $frameUrl = $frameUri.AbsoluteUri
+        Write-Output ('Fetching frame ' + $frameIndex + ': ' + $frameUrl)
         try {
-            $frameUrl = (New-Object System.Uri($loginUrl, $m.Groups[1].Value)).AbsoluteUri
-            Write-Output ('Verifying session via frame: ' + $frameUrl)
             $frameResp = Invoke-WebRequest -Uri $frameUrl -WebSession $session -UseBasicParsing
-            $frameResp.Content | Out-File -FilePath (Join-Path $BASE_DIR 'frame_result.html') -Encoding UTF8
+            $frameFile = Join-Path $BASE_DIR ('frame_' + $frameIndex + '.html')
+            $frameResp.Content | Out-File -FilePath $frameFile -Encoding UTF8
             if ($frameResp.Content -match [regex]::Escape($username)) {
-                Write-Output ('Confirmed: username "' + $username + '" appears in the frame page.')
+                Write-Output ('Confirmed: username "' + $username + '" found in frame ' + $frameIndex + '.')
+                $usernameFound = $true
             } else {
-                Write-Output 'Frame fetched OK (this frame does not show the username).'
+                Write-Output ('Frame ' + $frameIndex + ' fetched OK (length ' + $frameResp.Content.Length + '), username not shown here.')
             }
         } catch {
-            Write-Output ('Frame fetch failed: ' + $_.Exception.Message)
+            Write-Output ('Frame ' + $frameIndex + ' fetch failed: ' + $_.Exception.Message)
         }
+    }
+    if ($usernameFound) {
+        Write-Output 'Result: logged-in session confirmed by page content.'
     }
     exit 0
 } elseif ($hasLoginForm) {
