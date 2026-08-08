@@ -570,6 +570,7 @@ if (-not $acfMatch) {
             @{ Id = 'acfmaindatanewbak'; Label = 'ACF主機' }
         )
         $sensorId = ''
+        $flexId = ''
         $dlDir = Join-Path $BASE_DIR 'downloads'
         New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
         $mcIdx = 0
@@ -616,6 +617,11 @@ if (-not $acfMatch) {
                     if ($sidCands.Count -gt 0) {
                         $sensorId = $sidCands[0]
                         Write-Output ('  sensorID: ' + $sensorId)
+                    }
+                    $flexCands = @([regex]::Matches($sHtml, '(?i)<p>\s*((?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*[0-9])[A-Z0-9]{15,22})\s*</p>') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+                    if ($flexCands.Count -gt 0) {
+                        $flexId = $flexCands[0]
+                        Write-Output ('  flexid: ' + $flexId)
                     }
                 }
 
@@ -703,14 +709,47 @@ if (-not $mcMatch) {
         foreach ($st in $mcStations) {
             $stIdx++
             Write-Output ('  station ' + $stIdx + ': ' + $st.Label + ' (' + $st.Id + ')')
+            $stSearchType = 'SN'
+            $stCondition = $sn
+            try {
+                $sendJson3 = '[{"Key":"Station","Parametertype":1,"Value":"' + $st.Id + '"},{"Key":"SearchType","Parametertype":1,"Value":null},{"Key":"Condition","Parametertype":3,"Value":null},{"Key":"IMGType","Parametertype":1,"Value":null},{"Key":"starttime","Parametertype":2,"Value":null},{"Key":"endtime","Parametertype":2,"Value":null}]'
+                $rpmJson3 = '{"ClassName":"MESReportTeamplate.TestReport.SMTAOIRepor","MethodName":"SearchType","SendParameters":' + $sendJson3 + ',"Othervalue":["' + $mcMatch.Groups[2].Value + '","' + $mcMatch.Groups[3].Value + '","' + $mcMatch.Groups[4].Value + '","' + $mcMatch.Groups[5].Value + '"]}'
+                $glBody3 = @{ Jsonstr = $rpmJson3 }
+                $gl3 = Invoke-WebRequest -Uri ($mcOrigin + '/ReportPortal/GetList') -Method Post -Body $glBody3 -WebSession $session -UseBasicParsing -TimeoutSec 60
+                Write-Output ('    GetList raw: ' + $gl3.Content)
+                $gl3Json = $gl3.Content | ConvertFrom-Json
+                if ($gl3Json.Resultflag -eq 1 -and $gl3Json.Resultvalue) {
+                    $opts = @()
+                    foreach ($o in $gl3Json.Resultvalue) {
+                        if ($o.Value) { foreach ($v in $o.Value) { $opts += $v } }
+                        elseif ($o.Id) { $opts += $o }
+                    }
+                    foreach ($opt in $opts) {
+                        if ([string]$opt.Id -eq 'SN' -or [string]$opt.Value -eq 'SN') { $stSearchType = [string]$opt.Id; $stCondition = $sn }
+                    }
+                    if ($stSearchType -eq 'SN') {
+                        foreach ($opt in $opts) {
+                            if (([string]$opt.Id) -match '(?i)sensor' -or ([string]$opt.Value) -match '(?i)sensor') { $stSearchType = [string]$opt.Id; $stCondition = $sensorId; break }
+                        }
+                    }
+                    if ($stSearchType -eq 'SN') {
+                        foreach ($opt in $opts) {
+                            if (([string]$opt.Id) -match '(?i)flex' -or ([string]$opt.Value) -match '(?i)flex') { $stSearchType = [string]$opt.Id; $stCondition = $flexId; break }
+                        }
+                    }
+                }
+            } catch {
+                Write-Output ('    GetList failed: ' + $_.Exception.Message)
+            }
+            Write-Output ('    using SearchType=' + $stSearchType + ' Condition=' + $stCondition)
             $sf = @{}
             foreach ($k in $mcFields.Keys) {
                 if ($k -eq 'token') { continue }
                 $sf[$k] = [System.Net.WebUtility]::HtmlDecode([string]$mcFields[$k])
             }
             $sf['Station'] = $st.Id
-            $sf['SearchType'] = 'SN'
-            $sf['Condition'] = $imgCondition
+            $sf['SearchType'] = $stSearchType
+            $sf['Condition'] = $stCondition
             $sf['IMGType'] = ''
             $sf['starttime'] = '06/01/2026 00:00'
             $sf['endtime'] = '08/08/2026 23:59'
