@@ -22,6 +22,9 @@
   和 `Tracking/sntotalinfo.aspx` 上提交 SN 查询,结果保存为 `sn_result_*.html`
 - SN search 的结果会自动解析为汇总表 + 站位轨迹 + 耗材记录,保存为
   `sn_trace_report.txt`
+- 解析时会自动提取 Sensor / VCM / Lens 等组件 ID(前端在 LM 之前没有模组 SN,
+  需用组件 ID 查询);Step 8 会用这些 ID 在 Test data 的 SensorID 模式逐一查询,
+  结果保存为 `testdata_result_*.html`
 - Test data 页面支持日期/批號/SensorID 三种查询模式;脚本会自动切换到
   SensorID 模式并用 SN 查询,结果保存为 `testdata_sn_result.html`
 - 过程页面保存:`login_page.html`、`login_post_result.html`、`login_result.html`、

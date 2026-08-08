@@ -302,6 +302,8 @@ if (-not $sn) {
                 $rows = [regex]::Matches($qResHtml, '<tr\b[^>]*>(.*?)</tr>', 'IgnoreCase, Singleline')
                 $stations = @()
                 $consumables = @()
+                $components = @()
+                $componentIds = @()
                 $summaryRow = @()
                 foreach ($r in $rows) {
                     $tds = @([regex]::Matches($r.Groups[1].Value, '<td\b[^>]*>(.*?)</td>', 'IgnoreCase, Singleline') | ForEach-Object { $_.Groups[1].Value.Trim() })
@@ -311,8 +313,13 @@ if (-not $sn) {
                         $summaryRow = $tds
                     } elseif ($tds.Count -eq 4 -and $tds[0] -match '^[A-Za-z]\d{4}-') {
                         $consumables += [pscustomobject]@{ Material = $tds[0]; Lot = $tds[1]; Name = $tds[2]; Station = $tds[3] }
+                        if ($tds[2] -match '(?i)sensor|lens|vcm|stiffener|tape') {
+                            $components += [pscustomobject]@{ Material = $tds[0]; Id = $tds[1]; Name = $tds[2]; Station = $tds[3] }
+                            $componentIds += $tds[1]
+                        }
                     }
                 }
+                $componentIds = $componentIds | Select-Object -Unique
                 $sumHeaders = @('SN','批號','EOL測試結果','FOL測試結果','SFC結果','線體','包號','包裝時間','箱號','銷單號','出貨地址','出貨時間')
                 $reportLines = New-Object System.Collections.Generic.List[string]
                 $reportLines.Add('==== SN 汇总 ====')
@@ -327,6 +334,11 @@ if (-not $sn) {
                 foreach ($st in $stations) {
                     $idx++
                     $reportLines.Add(('  ' + $idx + '. ' + $st.Station + '  |  ' + $st.Time))
+                }
+                $reportLines.Add('')
+                $reportLines.Add(('==== 组件绑定 (' + $components.Count + ') ===='))
+                foreach ($cp in $components) {
+                    $reportLines.Add(('  ' + $cp.Material + ' | ' + $cp.Id + ' | ' + $cp.Name + ' | ' + $cp.Station))
                 }
                 $reportLines.Add('')
                 $reportLines.Add(('==== 耗材记录 (' + $consumables.Count + ') ===='))
@@ -344,39 +356,51 @@ if (-not $sn) {
     }
 }
 
-# ---- Step 8: Test data page, SensorID query mode ----
-Write-Output 'Step 8: switching Test data page to SensorID query mode...'
-$tdUrl = $origin + '/VTQReport/VTQTestDataDownLoad.aspx'
-try {
-    $tdResp = Invoke-WebRequest -Uri $tdUrl -WebSession $session -UseBasicParsing
-    $tdHtml = $tdResp.Content
-    $fields = Get-FormFields $tdHtml
-    $body = @{}
-    foreach ($k in $fields.Keys) { $body[$k] = $fields[$k] }
-    $body['selectradio'] = '3'
-    $body['__EVENTTARGET'] = 'selectradio$2'
-    $body['__EVENTARGUMENT'] = ''
-    $mResp = Invoke-WebRequest -Uri $tdUrl -Method Post -Body $body -WebSession $session -UseBasicParsing
-    $mHtml = $mResp.Content
-    $modeFile = Join-Path $BASE_DIR 'testdata_sensorid_mode.html'
-    $mHtml | Out-File -FilePath $modeFile -Encoding UTF8
-    $textInputs = [regex]::Matches($mHtml, '<input\b[^>]*\btype\s*=\s*["'']text["''][^>]*>', 'IgnoreCase')
-    $names = @()
-    foreach ($ti in $textInputs) {
-        $nm = [regex]::Match($ti.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-        if ($nm.Success) { $names += $nm.Groups[1].Value }
-    }
-    Write-Output ('SensorID mode page saved: ' + $modeFile)
-    Write-Output ('  text fields now: ' + ($names -join ', '))
+# ---- Step 8: Test data SensorID query mode, using component IDs ----
+Write-Output 'Step 8: Test data SensorID queries...'
+$idsToQuery = @()
+if ($componentIds.Count -gt 0) { $idsToQuery = @($componentIds) }
+elseif ($sn) { $idsToQuery = @($sn) }
 
-    if ($sn) {
-        $sensorField = $names | Where-Object { $_ -match '(?i)sensor|sn' } | Select-Object -First 1
-        if (-not $sensorField) { $sensorField = $names | Select-Object -First 1 }
-        if ($sensorField) {
+if ($idsToQuery.Count -eq 0) {
+    Write-Output '  no ID to query (no component IDs and no SN).'
+} else {
+    Write-Output ('  IDs to query: ' + ($idsToQuery -join ', '))
+    $tdUrl = $origin + '/VTQReport/VTQTestDataDownLoad.aspx'
+    $qidIndex = 0
+    foreach ($qid in $idsToQuery) {
+        $qidIndex++
+        if ($qidIndex -gt 8) { break }
+        Write-Output ('  SensorID query ' + $qidIndex + ': ' + $qid)
+        try {
+            $tdResp = Invoke-WebRequest -Uri $tdUrl -WebSession $session -UseBasicParsing
+            $fields = Get-FormFields $tdResp.Content
+            $body = @{}
+            foreach ($k in $fields.Keys) { $body[$k] = $fields[$k] }
+            $body['selectradio'] = '3'
+            $body['__EVENTTARGET'] = 'selectradio$2'
+            $body['__EVENTARGUMENT'] = ''
+            $mResp = Invoke-WebRequest -Uri $tdUrl -Method Post -Body $body -WebSession $session -UseBasicParsing
+            $mHtml = $mResp.Content
+            $mFile = Join-Path $BASE_DIR ('testdata_mode_' + $qidIndex + '.html')
+            $mHtml | Out-File -FilePath $mFile -Encoding UTF8
+
+            $textInputs = [regex]::Matches($mHtml, '<input\b[^>]*\btype\s*=\s*["'']text["''][^>]*>', 'IgnoreCase')
+            $names = @()
+            foreach ($ti in $textInputs) {
+                $nm = [regex]::Match($ti.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+                if ($nm.Success) { $names += $nm.Groups[1].Value }
+            }
+            $sensorField = $names | Where-Object { $_ -match '(?i)sensor|sn' } | Select-Object -First 1
+            if (-not $sensorField) { $sensorField = $names | Select-Object -First 1 }
+            if (-not $sensorField) {
+                Write-Output '  no text field found in SensorID mode.'
+                continue
+            }
             $fields2 = Get-FormFields $mHtml
             $body2 = @{}
             foreach ($k in $fields2.Keys) { $body2[$k] = $fields2[$k] }
-            $body2[$sensorField] = $sn
+            $body2[$sensorField] = $qid
             $trig = ''
             $btnM = [regex]::Match($mHtml, '<input\b[^>]*\btype\s*=\s*["'']submit["''][^>]*>', 'IgnoreCase')
             if ($btnM.Success) {
@@ -389,20 +413,18 @@ try {
             }
             $body2['__EVENTTARGET'] = $trig
             $body2['__EVENTARGUMENT'] = ''
-            Write-Output ('  filling ' + $sensorField + ' with SN, trigger=' + $trig)
+            Write-Output ('  field=' + $sensorField + ' trigger=' + $trig)
             $rResp = Invoke-WebRequest -Uri $tdUrl -Method Post -Body $body2 -WebSession $session -UseBasicParsing -TimeoutSec 120
             $rHtml = $rResp.Content
-            $rFile = Join-Path $BASE_DIR 'testdata_sn_result.html'
+            $rFile = Join-Path $BASE_DIR ('testdata_result_' + $qidIndex + '.html')
             $rHtml | Out-File -FilePath $rFile -Encoding UTF8
             $trCount = [regex]::Matches($rHtml, '<tr\b', 'IgnoreCase').Count
-            $snInPage = $rHtml -match [regex]::Escape($sn)
-            Write-Output ('  result length=' + $rHtml.Length + ' rows=' + $trCount + ' snInPage=' + $snInPage + ' saved: ' + $rFile)
-        } else {
-            Write-Output '  no text field found in SensorID mode.'
+            $idInPage = $rHtml -match [regex]::Escape($qid)
+            Write-Output ('  result length=' + $rHtml.Length + ' rows=' + $trCount + ' idInPage=' + $idInPage + ' saved: ' + $rFile)
+        } catch {
+            Write-Output ('  failed: ' + $_.Exception.Message)
         }
     }
-} catch {
-    Write-Output ('  failed: ' + $_.Exception.Message)
 }
 Write-Output 'Done.'
 exit 0
