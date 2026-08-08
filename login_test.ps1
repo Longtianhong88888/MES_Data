@@ -569,11 +569,16 @@ if (-not $acfMatch) {
             if ($k -eq 'token') { continue }
             $searchFields[$k] = $fields[$k]
         }
+        # decode HTML entities (e.g. OtherValue contains &quot; in the page source)
+        foreach ($k in $searchFields.Keys) {
+            $searchFields[$k] = [System.Net.WebUtility]::HtmlDecode([string]$searchFields[$k])
+        }
         if (-not $searchFields.ContainsKey('MCType') -or -not $searchFields['MCType']) { $searchFields['MCType'] = 'acfbondnewdatabak' }
         if ($pick) { $searchFields['SearchType'] = $pick } else { $searchFields['SearchType'] = 'SN' }
         $searchFields['Condition'] = $sn
         $searchFields['starttime'] = '06/01/2026 00:00'
         $searchFields['endtime'] = '08/08/2026 23:59'
+        Write-Output ('  OtherValue=' + $searchFields['OtherValue'])
 
         $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
         $sb = New-Object System.Text.StringBuilder
