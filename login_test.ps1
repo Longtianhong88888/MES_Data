@@ -521,6 +521,7 @@ if (-not $acfMatch) {
     try {
         $acfPage = Invoke-WebRequest -Uri $acfUrl -Method Post -Body $acfBody -ContentType 'application/x-www-form-urlencoded' -WebSession $session -UseBasicParsing
         $acfHtml = $acfPage.Content
+        if ($acfPage.Headers['Set-Cookie']) { Write-Output ('  portal Set-Cookie: ' + [string]$acfPage.Headers['Set-Cookie']) }
         $fields = Get-FormFields $acfHtml
 
         $tokenVal = ''
@@ -562,7 +563,19 @@ if (-not $acfMatch) {
         if ($visible.Length -gt 300) { $visible = $visible.Substring(0, 300) }
         Write-Output ('  preview: ' + $visible)
     } catch {
-        Write-Output ('  ACF search failed: ' + $_.Exception.Message)
+        $errMsg = $_.Exception.Message
+        try {
+            $errResp = $_.Exception.Response
+            if ($errResp) {
+                $sReader = New-Object System.IO.StreamReader($errResp.GetResponseStream())
+                $errBody = $sReader.ReadToEnd()
+                $sReader.Close()
+                $errBody = ($errBody -replace '<[^>]+>', ' ') -replace '\s+', ' '
+                if ($errBody.Length -gt 600) { $errBody = $errBody.Substring(0, 600) }
+                Write-Output ('  server response: ' + $errBody)
+            }
+        } catch {}
+        Write-Output ('  ACF search failed: ' + $errMsg)
     }
 }
 Write-Output 'Done.'
