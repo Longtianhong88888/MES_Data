@@ -564,72 +564,73 @@ if (-not $acfMatch) {
             if ($tv.Success) { $tokenVal = $tv.Groups[1].Value }
         }
 
-        $searchFields = @{}
-        foreach ($k in $fields.Keys) {
-            if ($k -eq 'token') { continue }
-            $searchFields[$k] = $fields[$k]
-        }
-        # decode HTML entities (e.g. OtherValue contains &quot; in the page source)
-        $decodedFields = @{}
-        foreach ($k in $searchFields.Keys) {
-            $decodedFields[$k] = [System.Net.WebUtility]::HtmlDecode([string]$searchFields[$k])
-        }
-        $searchFields = $decodedFields
-        if (-not $searchFields.ContainsKey('MCType') -or -not $searchFields['MCType']) { $searchFields['MCType'] = 'acfbondnewdatabak' }
-        if ($pick) { $searchFields['SearchType'] = $pick } else { $searchFields['SearchType'] = 'SN' }
-        $searchFields['Condition'] = $sn
-        $searchFields['starttime'] = '06/01/2026 00:00'
-        $searchFields['endtime'] = '08/08/2026 23:59'
-        Write-Output ('  OtherValue=' + $searchFields['OtherValue'])
-
-        $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
-        $sb = New-Object System.Text.StringBuilder
-        foreach ($k in $searchFields.Keys) {
-            [void]$sb.Append('--' + $boundary + "`r`n")
-            [void]$sb.Append('Content-Disposition: form-data; name="' + $k + '"' + "`r`n`r`n")
-            [void]$sb.Append([string]$searchFields[$k] + "`r`n")
-        }
-        [void]$sb.Append('--' + $boundary + "--`r`n")
-
-        $headers = @{}
-        if ($tokenVal) { $headers['Authorization'] = 'Bearer ' + $tokenVal }
-        Write-Output ('  search: MCType=' + $searchFields['MCType'] + ' SearchType=' + $searchFields['SearchType'] + ' Condition=' + $sn + ' token=' + $tokenVal)
-        $sResp = Invoke-WebRequest -Uri ($acfOrigin + '/ReportPortal/Search') -Method Post -Body $sb.ToString() -ContentType ('multipart/form-data; boundary=' + $boundary) -Headers $headers -WebSession $session -UseBasicParsing -TimeoutSec 120
-        $sHtml = $sResp.Content
-        $sFile = Join-Path $BASE_DIR 'portal_search_acf.html'
-        $sHtml | Out-File -FilePath $sFile -Encoding UTF8
-        Write-Output ('  status=' + [int]$sResp.StatusCode + ' length=' + $sHtml.Length + ' saved: ' + $sFile)
-        $visible = ($sHtml -replace '<[^>]+>', ' ') -replace '\s+', ' '
-        if ($visible.Length -gt 300) { $visible = $visible.Substring(0, 300) }
-        Write-Output ('  preview: ' + $visible)
-
-        # download the generated Excel export and the station images
+        $acfMCList = @(
+            @{ Id = 'acfbondnewdatabak'; Label = 'ACF上料機' },
+            @{ Id = 'acfunloadbondnewdatabak'; Label = 'ACF下料機' },
+            @{ Id = 'acfmaindatanewbak'; Label = 'ACF主機' }
+        )
         $dlDir = Join-Path $BASE_DIR 'downloads'
         New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
-        $xlsm = [regex]::Match($sHtml, 'href="([^"]*\.xlsx[^"]*)"', 'IgnoreCase')
-        if ($xlsm.Success) {
-            $xlsUrl = [System.Net.WebUtility]::HtmlDecode($xlsm.Groups[1].Value) -replace '\\', '/'
-            Write-Output ('  Excel: ' + $xlsUrl)
-            try {
-                $xlsFile = Join-Path $dlDir 'acf_testdata.xlsx'
-                Invoke-WebRequest -Uri $xlsUrl -OutFile $xlsFile -WebSession $session -UseBasicParsing -TimeoutSec 120
-                Write-Output ('  Excel saved: ' + $xlsFile + ' (' + (Get-Item $xlsFile).Length + ' bytes)')
-            } catch {
-                Write-Output ('  Excel download failed: ' + $_.Exception.Message)
+        $mcIdx = 0
+        foreach ($mc in $acfMCList) {
+            $mcIdx++
+            Write-Output ('  [' + $mcIdx + '/' + $acfMCList.Count + '] ' + $mc.Label + ' (' + $mc.Id + ')')
+            $searchFields = @{}
+            foreach ($k in $fields.Keys) {
+                if ($k -eq 'token') { continue }
+                $searchFields[$k] = $fields[$k]
             }
-        }
-        $imgUrls = @([regex]::Matches($sHtml, 'href="(http://cma1[^"]*\.jpg[^"]*)"', 'IgnoreCase') | ForEach-Object { [System.Net.WebUtility]::HtmlDecode($_.Groups[1].Value) })
-        Write-Output ('  ACF images found: ' + $imgUrls.Count)
-        if ($imgUrls.Count -gt 0) {
-            $imgListFile = Join-Path $dlDir 'acf_images.txt'
-            $imgUrls | Out-File -FilePath $imgListFile -Encoding UTF8
-            Write-Output ('  image list saved: ' + $imgListFile)
-            $firstImg = Join-Path $dlDir 'acf_test.jpg'
+            $decodedFields = @{}
+            foreach ($k in $searchFields.Keys) {
+                $decodedFields[$k] = [System.Net.WebUtility]::HtmlDecode([string]$searchFields[$k])
+            }
+            $searchFields = $decodedFields
+            $searchFields['MCType'] = $mc.Id
+            $searchFields['SearchType'] = 'SN'
+            $searchFields['Condition'] = $sn
+            $searchFields['starttime'] = '06/01/2026 00:00'
+            $searchFields['endtime'] = '08/08/2026 23:59'
+
+            $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
+            $sb = New-Object System.Text.StringBuilder
+            foreach ($k in $searchFields.Keys) {
+                [void]$sb.Append('--' + $boundary + "`r`n")
+                [void]$sb.Append('Content-Disposition: form-data; name="' + $k + '"' + "`r`n`r`n")
+                [void]$sb.Append([string]$searchFields[$k] + "`r`n")
+            }
+            [void]$sb.Append('--' + $boundary + "--`r`n")
+
+            $headers = @{}
+            if ($tokenVal) { $headers['Authorization'] = 'Bearer ' + $tokenVal }
+            Write-Output ('  search: MCType=' + $mc.Id + ' SearchType=SN Condition=' + $sn)
             try {
-                Invoke-WebRequest -Uri $imgUrls[0] -OutFile $firstImg -WebSession $session -UseBasicParsing -TimeoutSec 60
-                Write-Output ('  test image saved: ' + $firstImg + ' (' + (Get-Item $firstImg).Length + ' bytes)')
+                $sResp = Invoke-WebRequest -Uri ($acfOrigin + '/ReportPortal/Search') -Method Post -Body $sb.ToString() -ContentType ('multipart/form-data; boundary=' + $boundary) -Headers $headers -WebSession $session -UseBasicParsing -TimeoutSec 120
+                $sHtml = $sResp.Content
+                $sFile = Join-Path $BASE_DIR ('portal_search_acf_' + $mcIdx + '.html')
+                $sHtml | Out-File -FilePath $sFile -Encoding UTF8
+                Write-Output ('  status=' + [int]$sResp.StatusCode + ' length=' + $sHtml.Length + ' saved: ' + $sFile)
+
+                # download the generated Excel export for this MC type
+                $xlsm = [regex]::Match($sHtml, 'href="([^"]*\.xlsx[^"]*)"', 'IgnoreCase')
+                if ($xlsm.Success) {
+                    $xlsUrl = [System.Net.WebUtility]::HtmlDecode($xlsm.Groups[1].Value) -replace '\\', '/'
+                    try {
+                        $xlsFile = Join-Path $dlDir ('acf_testdata_' + $mcIdx + '.xlsx')
+                        Invoke-WebRequest -Uri $xlsUrl -OutFile $xlsFile -WebSession $session -UseBasicParsing -TimeoutSec 120
+                        Write-Output ('  Excel saved: ' + $xlsFile + ' (' + (Get-Item $xlsFile).Length + ' bytes)')
+                    } catch {
+                        Write-Output ('  Excel download failed: ' + $_.Exception.Message)
+                    }
+                }
+                $imgUrls = @([regex]::Matches($sHtml, 'href="(http://cma1[^"]*\.jpg[^"]*)"', 'IgnoreCase') | ForEach-Object { [System.Net.WebUtility]::HtmlDecode($_.Groups[1].Value) })
+                Write-Output ('  ACF images found: ' + $imgUrls.Count)
+                if ($imgUrls.Count -gt 0) {
+                    $imgListFile = Join-Path $dlDir ('acf_images_' + $mcIdx + '.txt')
+                    $imgUrls | Out-File -FilePath $imgListFile -Encoding UTF8
+                    Write-Output ('  image list saved: ' + $imgListFile)
+                }
             } catch {
-                Write-Output ('  image download failed: ' + $_.Exception.Message)
+                Write-Output ('  search failed for ' + $mc.Id + ': ' + $_.Exception.Message)
             }
         }
     } catch {
