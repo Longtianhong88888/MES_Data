@@ -15,10 +15,9 @@
 - 脚本自动完成 ASP.NET 登录:GET `login.aspx` → 解析 `__VIEWSTATE`/`__EVENTVALIDATION`
   → POST 账号密码 → 打开 `index.aspx` 应用入口
 - frame 中出现"登入已過期"跳转 = 会话无效;全部正常加载 = 登录成功
-- 登录成功后扫描 top/left/home 三个 frame,统计链接数量和疑似下载资源,
-  并逐个打开下载页(`vtq_*.html`)检查文件链接、按钮和表单
-- 自动触发下载页的 Excel 导出(`toexcelbutton` 回发),文件保存到
-  `downloads\dl_*.xls`;若直接导出返回 HTML,会自动先执行搜索再导出
+- 登录成功后扫描 top/left/home 三个 frame,列出菜单链接
+- 逐个抓取 SN 追溯查询页(`sn_*.html`),报告查询表单的输入框和按钮结构,
+  为下一步"输入模组 SN 查询全制程绑定信息"做准备
 - 过程页面保存:`login_page.html`、`login_post_result.html`、`login_result.html`、
   `frame_1.html` / `frame_2.html` / `frame_3.html`
 - 完整日志保存在 `login.log`

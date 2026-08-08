@@ -1,4 +1,4 @@
-# login_test.ps1 - auto-login + resource scan for the internal MES site
+# login_test.ps1 - auto-login + SN trace page discovery for the internal MES site
 # Zero-install: uses Windows built-in PowerShell 5.1 only.
 #
 # Flow:
@@ -6,9 +6,8 @@
 #   2. POST credentials + hidden fields to login.aspx
 #   3. Open the app entry URL from config.json
 #   4. Fetch top/left/home frames, verify the session is valid
-#   5. Count links / download-like resources found in the frames
-#   6. Inspect each download page (form fields, buttons)
-#   7. Trigger the Excel export (toexcelbutton postback) and save the files
+#   5. List the frames' menu links and download-like pages
+#   6. Fetch the SN trace query pages and report their query form structure
 
 param(
     [string]$Username = '',
@@ -145,8 +144,8 @@ if (-not $sessionValid) {
 }
 Write-Output 'Result: session authenticated OK.'
 
-# ---- Step 5: scan frames for resources ----
-Write-Output 'Step 5: scanning frames for resources...'
+# ---- Step 5: list menu links and download-like pages ----
+Write-Output 'Step 5: listing menu links...'
 $allHrefs = @()
 foreach ($fc in $framesToScan) {
     $hrefs = [regex]::Matches($fc, 'href\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase') | ForEach-Object { $_.Groups[1].Value }
@@ -156,117 +155,40 @@ foreach ($fc in $framesToScan) {
 }
 $uniqueHrefs = $allHrefs | Where-Object { $_ -ne '#' } | Sort-Object -Unique
 Write-Output ('Unique non-empty hrefs: ' + $uniqueHrefs.Count)
-$dlHrefs = $uniqueHrefs | Where-Object { $_ -match '\.(pdf|xls|xlsx|zip|rar|csv|doc|docx|txt|dat)(\?|$)' -or $_ -match 'download|attach|getfile|file=' }
-Write-Output ('Download-like page links: ' + $dlHrefs.Count)
-if ($dlHrefs.Count -gt 0) {
-    $dlHrefs | ForEach-Object { Write-Output ('  - ' + $_) }
-}
 
-# ---- Step 6: crawl each download page and inspect its content ----
+# ---- Step 6: inspect the SN trace query pages ----
+Write-Output 'Step 6: inspecting SN trace query pages...'
+$snPages = @(
+    'VTQTestSNCurrentState.aspx',
+    'TestSnCurrentStatus.aspx',
+    'TestSNCurrentStateNew.aspx',
+    'VTQTestSNCurrentStateNew.aspx',
+    'VTTestSnCurrentStateSorting.aspx',
+    'TestSNCurrentStateCre.aspx',
+    'SnTestTrack.aspx',
+    'FOLSnTestTrack.aspx',
+    'NHASNSearch.aspx'
+)
 $pageIndex = 0
-foreach ($dl in $dlHrefs) {
+foreach ($pageName in $snPages) {
     $pageIndex++
-    if ($pageIndex -gt 15) { break }
+    $snUrl = $origin + '/VTQReport/' + $pageName
+    Write-Output ('SN page ' + $pageIndex + ': ' + $snUrl)
     try {
-        $absUrl = (New-Object System.Uri($base, $dl)).AbsoluteUri
-        Write-Output ('Opening download page ' + $pageIndex + ': ' + $absUrl)
-        $dResp = Invoke-WebRequest -Uri $absUrl -WebSession $session -UseBasicParsing
-        $dHtml = $dResp.Content
-        $dFile = Join-Path $BASE_DIR ('vtq_' + $pageIndex + '.html')
-        $dHtml | Out-File -FilePath $dFile -Encoding UTF8
-        $fileHrefs = [regex]::Matches($dHtml, 'href\s*=\s*["'']([^"'']+\.(?:pdf|xls|xlsx|zip|rar|csv|doc|docx|txt|dat)(?:\?[^"'']*)?)["'']', 'IgnoreCase') | ForEach-Object { $_.Groups[1].Value }
-        $submitButtons = [regex]::Matches($dHtml, '<input\b[^>]*\btype\s*=\s*["''](?:submit|button)["''][^>]*>', 'IgnoreCase')
-        $formFields = [regex]::Matches($dHtml, '<input\b[^>]*>', 'IgnoreCase')
-        Write-Output ('  status=' + [int]$dResp.StatusCode + ' length=' + $dHtml.Length + ' fileLinks=' + $fileHrefs.Count + ' buttons=' + $submitButtons.Count + ' inputs=' + $formFields.Count)
-        foreach ($fh in ($fileHrefs | Select-Object -First 10)) {
-            Write-Output ('    FILE: ' + $fh)
+        $sResp = Invoke-WebRequest -Uri $snUrl -WebSession $session -UseBasicParsing
+        $sHtml = $sResp.Content
+        $sFile = Join-Path $BASE_DIR ('sn_' + $pageIndex + '.html')
+        $sHtml | Out-File -FilePath $sFile -Encoding UTF8
+        $textInputs = [regex]::Matches($sHtml, '<input\b[^>]*\btype\s*=\s*["'']text["''][^>]*>', 'IgnoreCase')
+        $submitButtons = [regex]::Matches($sHtml, '<input\b[^>]*\btype\s*=\s*["'']submit["''][^>]*>', 'IgnoreCase')
+        $nameList = @()
+        foreach ($ti in $textInputs) {
+            $nm = [regex]::Match($ti.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+            if ($nm.Success) { $nameList += $nm.Groups[1].Value }
         }
-    } catch {
-        Write-Output ('  failed: ' + $_.Exception.Message)
-    }
-}
-
-# ---- Step 7: trigger Excel export on each download page and save files ----
-Write-Output 'Step 7: attempting Excel export from each download page...'
-$downloadDir = Join-Path $BASE_DIR 'downloads'
-New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-
-function Get-FormFields([string]$html) {
-    $fields = @{}
-    foreach ($m in [regex]::Matches($html, '<input\b[^>]*>', 'IgnoreCase')) {
-        $tag = $m.Value
-        $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-        if (-not $nm.Success) { continue }
-        $name = $nm.Groups[1].Value
-        if ($name -eq '__EVENTTARGET' -or $name -eq '__EVENTARGUMENT') { continue }
-        $tp = [regex]::Match($tag, '\btype\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-        $type = ''
-        if ($tp.Success) { $type = $tp.Groups[1].Value.ToLower() }
-        if ($type -eq 'submit' -or $type -eq 'button' -or $type -eq 'image') { continue }
-        $vl = [regex]::Match($tag, '\bvalue\s*=\s*["'']([^"'']*)["'']', 'IgnoreCase')
-        $value = ''
-        if ($vl.Success) { $value = $vl.Groups[1].Value }
-        if (($type -eq 'radio' -or $type -eq 'checkbox') -and $tag -notmatch '\bchecked\b') { continue }
-        $fields[$name] = $value
-    }
-    foreach ($m in [regex]::Matches($html, '<select\b[^>]*>(.*?)</select>', 'IgnoreCase, Singleline')) {
-        $tag = $m.Value
-        $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-        if (-not $nm.Success) { continue }
-        $name = $nm.Groups[1].Value
-        $opt = [regex]::Match($tag, '<option\b[^>]*\bselected(?:=[^ >]*)?[^>]*\bvalue="([^"]*)"', 'IgnoreCase')
-        if (-not $opt.Success) { $opt = [regex]::Match($tag, '<option\b[^>]*\bvalue="([^"]*)"', 'IgnoreCase') }
-        if (-not $opt.Success) { continue }
-        $fields[$name] = $opt.Groups[1].Value
-    }
-    return $fields
-}
-
-$pageIndex = 0
-foreach ($dl in $dlHrefs) {
-    $pageIndex++
-    if ($pageIndex -gt 15) { break }
-    try {
-        $absUrl = (New-Object System.Uri($base, $dl)).AbsoluteUri
-        $pageName = [regex]::Match($absUrl, '/([^/]+)\.aspx\s*$', 'IgnoreCase').Groups[1].Value
-        if (-not $pageName) { $pageName = 'page' + $pageIndex }
-        Write-Output ('Export ' + $pageIndex + ': ' + $pageName)
-
-        $gResp = Invoke-WebRequest -Uri $absUrl -WebSession $session -UseBasicParsing
-        $gHtml = $gResp.Content
-
-        $fileSaved = $false
-        $attempt = 0
-        while ($attempt -lt 2 -and -not $fileSaved) {
-            $attempt++
-            $fields = Get-FormFields $gHtml
-            $body = @{
-                '__EVENTTARGET' = 'toexcelbutton'
-                '__EVENTARGUMENT' = ''
-            }
-            foreach ($k in $fields.Keys) { $body[$k] = $fields[$k] }
-            if ($attempt -eq 2) {
-                $body['__EVENTTARGET'] = 'searchbutton'
-                Write-Output '  direct export returned HTML; trying search-then-export...'
-            }
-            $tmpFile = Join-Path $downloadDir ('dl_' + $pageIndex + '.bin')
-            $xResp = Invoke-WebRequest -Uri $absUrl -Method Post -Body $body -WebSession $session -UseBasicParsing -TimeoutSec 300 -OutFile $tmpFile
-            $ct = ''
-            if ($xResp.Headers['Content-Type']) { $ct = [string]$xResp.Headers['Content-Type'] }
-            if ($ct -match 'excel|octet-stream') {
-                $finalFile = Join-Path $downloadDir ('dl_' + $pageIndex + '_' + $pageName + '.xls')
-                Move-Item -Force -Path $tmpFile -Destination $finalFile
-                $size = (Get-Item $finalFile).Length
-                Write-Output ('  SAVED: ' + $finalFile + ' (' + $size + ' bytes, ' + $ct + ')')
-                $fileSaved = $true
-            } else {
-                $htmlFile = Join-Path $downloadDir ('dl_' + $pageIndex + '_' + $pageName + '_page.html')
-                Move-Item -Force -Path $tmpFile -Destination $htmlFile
-                Write-Output ('  not a file yet (content-type=' + $ct + ', saved page: ' + $htmlFile + ')')
-                if ($attempt -lt 2) {
-                    $gHtml = Get-Content -Path $htmlFile -Raw -Encoding UTF8
-                }
-            }
+        Write-Output ('  status=' + [int]$sResp.StatusCode + ' length=' + $sHtml.Length + ' textInputs=' + $textInputs.Count + ' buttons=' + $submitButtons.Count)
+        if ($nameList.Count -gt 0) {
+            Write-Output ('  text fields: ' + ($nameList -join ', '))
         }
     } catch {
         Write-Output ('  failed: ' + $_.Exception.Message)
