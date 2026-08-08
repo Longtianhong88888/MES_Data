@@ -524,6 +524,49 @@ if (-not $acfMatch) {
         if ($acfPage.Headers['Set-Cookie']) { Write-Output ('  portal Set-Cookie: ' + [string]$acfPage.Headers['Set-Cookie']) }
         $fields = Get-FormFields $acfHtml
 
+        # enumerate SearchType options via GetList (same call the page's JS makes)
+        $pick = ''
+        try {
+            $sendParams = @(
+                @{ Key = 'MCType'; Parametertype = 1; Value = 'acfbondnewdatabak' },
+                @{ Key = 'SearchType'; Parametertype = 1; Value = '' },
+                @{ Key = 'starttime'; Parametertype = 2; Value = '' },
+                @{ Key = 'endtime'; Parametertype = 2; Value = '' },
+                @{ Key = 'Condition'; Parametertype = 3; Value = '' }
+            )
+            $rpm = @{
+                ClassName = 'MESReportTeamplate.Report.ACF_TestData_WM'
+                MethodName = 'SearchType'
+                SendParameters = $sendParams
+                Othervalue = @($acfMatch.Groups[2].Value, $acfMatch.Groups[3].Value, $acfMatch.Groups[4].Value, $acfMatch.Groups[5].Value)
+            }
+            $glBody = @{ Jsonstr = ($rpm | ConvertTo-Json -Depth 8 -Compress) }
+            $glResp = Invoke-WebRequest -Uri ($acfOrigin + '/ReportPortal/GetList') -Method Post -Body $glBody -WebSession $session -UseBasicParsing -TimeoutSec 60
+            $glJson = $glResp.Content | ConvertFrom-Json
+            Write-Output ('  GetList Resultflag=' + $glJson.Resultflag + ' Message=' + $glJson.Message)
+            if ($glJson.Resultflag -eq '1') {
+                $opts = $glJson.Resultvalue
+                $optsJson = $opts | ConvertTo-Json -Depth 6 -Compress
+                Write-Output ('  SearchType options: ' + $optsJson)
+                foreach ($o in $opts) {
+                    foreach ($v in $o.Value) {
+                        if ([string]$v.Id -eq 'SN' -or [string]$v.Value -eq 'SN') { $pick = [string]$v.Id }
+                    }
+                }
+                if (-not $pick) {
+                    foreach ($o in $opts) {
+                        foreach ($v in $o.Value) {
+                            if (([string]$v.Id) -match '^SN' -or ([string]$v.Value) -match '^SN') { $pick = [string]$v.Id; break }
+                        }
+                        if ($pick) { break }
+                    }
+                }
+                if ($pick) { Write-Output ('  using SearchType=' + $pick) }
+            }
+        } catch {
+            Write-Output ('  GetList failed: ' + $_.Exception.Message)
+        }
+
         $tokenVal = ''
         $tokM = [regex]::Match($acfHtml, '<input\b[^>]*\bname="token"[^>]*>', 'IgnoreCase')
         if ($tokM.Success) {
@@ -537,10 +580,10 @@ if (-not $acfMatch) {
             $searchFields[$k] = $fields[$k]
         }
         if (-not $searchFields.ContainsKey('MCType') -or -not $searchFields['MCType']) { $searchFields['MCType'] = 'acfbondnewdatabak' }
-        $searchFields['SearchType'] = 'SN'
+        if ($pick) { $searchFields['SearchType'] = $pick } else { $searchFields['SearchType'] = 'SN' }
         $searchFields['Condition'] = $sn
-        $searchFields['starttime'] = '2026/06/01 00:00:00'
-        $searchFields['endtime'] = '2026/08/08 23:59:59'
+        $searchFields['starttime'] = ''
+        $searchFields['endtime'] = ''
 
         $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
         $sb = New-Object System.Text.StringBuilder
