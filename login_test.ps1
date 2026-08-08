@@ -7,6 +7,8 @@
 #   3. Open the app entry URL from config.json
 #   4. Fetch top/left/home frames, verify the session is valid
 #   5. Count links / download-like resources found in the frames
+#   6. Inspect each download page (form fields, buttons)
+#   7. Trigger the Excel export (toexcelbutton postback) and save the files
 
 param(
     [string]$Username = '',
@@ -178,6 +180,93 @@ foreach ($dl in $dlHrefs) {
         Write-Output ('  status=' + [int]$dResp.StatusCode + ' length=' + $dHtml.Length + ' fileLinks=' + $fileHrefs.Count + ' buttons=' + $submitButtons.Count + ' inputs=' + $formFields.Count)
         foreach ($fh in ($fileHrefs | Select-Object -First 10)) {
             Write-Output ('    FILE: ' + $fh)
+        }
+    } catch {
+        Write-Output ('  failed: ' + $_.Exception.Message)
+    }
+}
+
+# ---- Step 7: trigger Excel export on each download page and save files ----
+Write-Output 'Step 7: attempting Excel export from each download page...'
+$downloadDir = Join-Path $BASE_DIR 'downloads'
+New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
+
+function Get-FormFields([string]$html) {
+    $fields = @{}
+    foreach ($m in [regex]::Matches($html, '<input\b[^>]*>', 'IgnoreCase')) {
+        $tag = $m.Value
+        $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+        if (-not $nm.Success) { continue }
+        $name = $nm.Groups[1].Value
+        if ($name -eq '__EVENTTARGET' -or $name -eq '__EVENTARGUMENT') { continue }
+        $tp = [regex]::Match($tag, '\btype\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+        $type = ''
+        if ($tp.Success) { $type = $tp.Groups[1].Value.ToLower() }
+        if ($type -eq 'submit' -or $type -eq 'button' -or $type -eq 'image') { continue }
+        $vl = [regex]::Match($tag, '\bvalue\s*=\s*["'']([^"'']*)["'']', 'IgnoreCase')
+        $value = ''
+        if ($vl.Success) { $value = $vl.Groups[1].Value }
+        if (($type -eq 'radio' -or $type -eq 'checkbox') -and $tag -notmatch '\bchecked\b') { continue }
+        $fields[$name] = $value
+    }
+    foreach ($m in [regex]::Matches($html, '<select\b[^>]*>(.*?)</select>', 'IgnoreCase, Singleline')) {
+        $tag = $m.Value
+        $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+        if (-not $nm.Success) { continue }
+        $name = $nm.Groups[1].Value
+        $opt = [regex]::Match($tag, '<option\b[^>]*\bselected(?:=[^ >]*)?[^>]*\bvalue="([^"]*)"', 'IgnoreCase')
+        if (-not $opt.Success) { $opt = [regex]::Match($tag, '<option\b[^>]*\bvalue="([^"]*)"', 'IgnoreCase') }
+        if (-not $opt.Success) { continue }
+        $fields[$name] = $opt.Groups[1].Value
+    }
+    return $fields
+}
+
+$pageIndex = 0
+foreach ($dl in $dlHrefs) {
+    $pageIndex++
+    if ($pageIndex -gt 15) { break }
+    try {
+        $absUrl = (New-Object System.Uri($base, $dl)).AbsoluteUri
+        $pageName = [regex]::Match($absUrl, '/([^/]+)\.aspx\s*$', 'IgnoreCase').Groups[1].Value
+        if (-not $pageName) { $pageName = 'page' + $pageIndex }
+        Write-Output ('Export ' + $pageIndex + ': ' + $pageName)
+
+        $gResp = Invoke-WebRequest -Uri $absUrl -WebSession $session -UseBasicParsing
+        $gHtml = $gResp.Content
+
+        $fileSaved = $false
+        $attempt = 0
+        while ($attempt -lt 2 -and -not $fileSaved) {
+            $attempt++
+            $fields = Get-FormFields $gHtml
+            $body = @{
+                '__EVENTTARGET' = 'toexcelbutton'
+                '__EVENTARGUMENT' = ''
+            }
+            foreach ($k in $fields.Keys) { $body[$k] = $fields[$k] }
+            if ($attempt -eq 2) {
+                $body['__EVENTTARGET'] = 'searchbutton'
+                Write-Output '  direct export returned HTML; trying search-then-export...'
+            }
+            $tmpFile = Join-Path $downloadDir ('dl_' + $pageIndex + '.bin')
+            $xResp = Invoke-WebRequest -Uri $absUrl -Method Post -Body $body -WebSession $session -UseBasicParsing -TimeoutSec 300 -OutFile $tmpFile
+            $ct = ''
+            if ($xResp.Headers['Content-Type']) { $ct = [string]$xResp.Headers['Content-Type'] }
+            if ($ct -match 'excel|octet-stream') {
+                $finalFile = Join-Path $downloadDir ('dl_' + $pageIndex + '_' + $pageName + '.xls')
+                Move-Item -Force -Path $tmpFile -Destination $finalFile
+                $size = (Get-Item $finalFile).Length
+                Write-Output ('  SAVED: ' + $finalFile + ' (' + $size + ' bytes, ' + $ct + ')')
+                $fileSaved = $true
+            } else {
+                $htmlFile = Join-Path $downloadDir ('dl_' + $pageIndex + '_' + $pageName + '_page.html')
+                Move-Item -Force -Path $tmpFile -Destination $htmlFile
+                Write-Output ('  not a file yet (content-type=' + $ct + ', saved page: ' + $htmlFile + ')')
+                if ($attempt -lt 2) {
+                    $gHtml = Get-Content -Path $htmlFile -Raw -Encoding UTF8
+                }
+            }
         }
     } catch {
         Write-Output ('  failed: ' + $_.Exception.Message)
