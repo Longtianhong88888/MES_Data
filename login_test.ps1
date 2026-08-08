@@ -527,20 +527,9 @@ if (-not $acfMatch) {
         # enumerate SearchType options via GetList (same call the page's JS makes)
         $pick = ''
         try {
-            $sendParams = @(
-                @{ Key = 'MCType'; Parametertype = 1; Value = 'acfbondnewdatabak' },
-                @{ Key = 'SearchType'; Parametertype = 1; Value = '' },
-                @{ Key = 'starttime'; Parametertype = 2; Value = '' },
-                @{ Key = 'endtime'; Parametertype = 2; Value = '' },
-                @{ Key = 'Condition'; Parametertype = 3; Value = '' }
-            )
-            $rpm = @{
-                ClassName = 'MESReportTeamplate.Report.ACF_TestData_WM'
-                MethodName = 'SearchType'
-                SendParameters = $sendParams
-                Othervalue = @($acfMatch.Groups[2].Value, $acfMatch.Groups[3].Value, $acfMatch.Groups[4].Value, $acfMatch.Groups[5].Value)
-            }
-            $glBody = @{ Jsonstr = ($rpm | ConvertTo-Json -Depth 8 -Compress) }
+            $sendJson = '[{"Key":"MCType","Parametertype":1,"Value":"acfbondnewdatabak"},{"Key":"SearchType","Parametertype":1,"Value":null},{"Key":"starttime","Parametertype":2,"Value":null},{"Key":"endtime","Parametertype":2,"Value":null},{"Key":"Condition","Parametertype":3,"Value":null}]'
+            $rpmJson = '{"ClassName":"MESReportTeamplate.Report.ACF_TestData_WM","MethodName":"SearchType","SendParameters":' + $sendJson + ',"Othervalue":["' + $acfMatch.Groups[2].Value + '","' + $acfMatch.Groups[3].Value + '","' + $acfMatch.Groups[4].Value + '","' + $acfMatch.Groups[5].Value + '"]}'
+            $glBody = @{ Jsonstr = $rpmJson }
             $glResp = Invoke-WebRequest -Uri ($acfOrigin + '/ReportPortal/GetList') -Method Post -Body $glBody -WebSession $session -UseBasicParsing -TimeoutSec 60
             $glJson = $glResp.Content | ConvertFrom-Json
             Write-Output ('  GetList Resultflag=' + $glJson.Resultflag + ' Message=' + $glJson.Message)
