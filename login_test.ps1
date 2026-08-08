@@ -88,15 +88,17 @@ $hasLoginForm = $html -match 'type\s*=\s*["'']password["'']'
 $hasFrameset  = $html -match '<frameset'
 
 if ($hasFrameset) {
-    Write-Output 'Result: main app frameset returned -> login looks SUCCESSFUL.'
+    Write-Output 'Result: main app frameset returned (POST accepted).'
 
     # Verify the session by fetching each frame page (top/left/home) with the
-    # same session and checking whether the username appears in any of them.
+    # same session. An expired/invalid session returns the frames with an
+    # injected "login expired" script (redirect to login.aspx) instead of content.
     $base = New-Object System.Uri($loginUrl)
     $frameMatches = [regex]::Matches($html, '<frame\b[^>]*\bsrc\s*=\s*["''](?<src>[^"'']+)["'']', 'IgnoreCase')
     Write-Output ('Frames found: ' + $frameMatches.Count)
     $frameIndex = 0
     $usernameFound = $false
+    $sessionInvalid = $false
     foreach ($fm in $frameMatches) {
         $frameIndex++
         if ($frameIndex -gt 3) { break }
@@ -108,7 +110,10 @@ if ($hasFrameset) {
             $frameResp = Invoke-WebRequest -Uri $frameUrl -WebSession $session -UseBasicParsing
             $frameFile = Join-Path $BASE_DIR ('frame_' + $frameIndex + '.html')
             $frameResp.Content | Out-File -FilePath $frameFile -Encoding UTF8
-            if ($frameResp.Content -match [regex]::Escape($username)) {
+            if ($frameResp.Content -match 'login\.aspx|window\.top\.location') {
+                Write-Output ('Frame ' + $frameIndex + ': SESSION INVALID (login-expired message found).')
+                $sessionInvalid = $true
+            } elseif ($frameResp.Content -match [regex]::Escape($username)) {
                 Write-Output ('Confirmed: username "' + $username + '" found in frame ' + $frameIndex + '.')
                 $usernameFound = $true
             } else {
@@ -120,6 +125,36 @@ if ($hasFrameset) {
     }
     if ($usernameFound) {
         Write-Output 'Result: logged-in session confirmed by page content.'
+        exit 0
+    }
+    if ($sessionInvalid) {
+        Write-Output 'Result: session is NOT authenticated - this site needs the real login page flow.'
+        # Probe the real login page so we can build a proper login POST.
+        $origin = $base.GetLeftPart([System.UriPartial]::Authority)
+        $loginPageUrl = $origin + '/login.aspx'
+        Write-Output ('Probing login page: ' + $loginPageUrl)
+        try {
+            $lpResp = Invoke-WebRequest -Uri $loginPageUrl -WebSession $session -UseBasicParsing
+            $lpResp.Content | Out-File -FilePath (Join-Path $BASE_DIR 'login_page.html') -Encoding UTF8
+            $inputs = [regex]::Matches($lpResp.Content, '<input\b[^>]*>', 'IgnoreCase')
+            Write-Output ('Login page input fields (' + $inputs.Count + '):')
+            foreach ($inp in $inputs) {
+                $nm = [regex]::Match($inp.Value, 'name\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+                $tp = [regex]::Match($inp.Value, 'type\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+                $name = ''
+                $type = ''
+                if ($nm.Success) { $name = $nm.Groups[1].Value }
+                if ($tp.Success) { $type = $tp.Groups[1].Value }
+                Write-Output ('  - name=' + $name + ' type=' + $type)
+            }
+            if ($lpResp.Content -match 'captcha|verifycode|verify_code') {
+                Write-Output 'WARNING: login page contains a captcha-like field.'
+            }
+        } catch {
+            Write-Output ('Login page probe failed: ' + $_.Exception.Message)
+        }
+    } else {
+        Write-Output 'Result: frames fetched but could not confirm the session from content.'
     }
     exit 0
 } elseif ($hasLoginForm) {

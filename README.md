@@ -12,8 +12,10 @@
 
 ## 输出说明
 
-- 页面返回主系统 frameset(`<frameset>`)→ 自动登录成功,脚本还会用同一会话
-  抓取 top/left/home 三个 frame 页面验证登录态
+- 页面返回主系统 frameset → 脚本会用同一会话抓取 top/left/home 三个 frame 验证登录态;
+  如果 frame 里出现"登入已過期"跳转,说明会话无效,需要走 `login.aspx` 真正登录流程
+- 会话无效时,脚本会自动抓取 `login.aspx` 并列出表单字段,保存为 `login_page.html`,
+  供分析真实登录方式
 - 页面仍包含密码输入框(`type="password"`)→ 登录失败,或需要验证码/额外认证
 - 登录后返回的页面会保存为 `login_result.html`,可以用浏览器打开检查
 - 验证用的 frame 页面保存为 `frame_1.html` / `frame_2.html` / `frame_3.html`
