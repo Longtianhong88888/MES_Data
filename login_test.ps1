@@ -473,6 +473,8 @@ foreach ($label in $portalLabels) {
             if ($nm.Success) { $names += $nm.Groups[1].Value }
         }
         Write-Output ('  status=' + [int]$pResp.StatusCode + ' length=' + $pHtml.Length + ' textFields=' + $names.Count)
+        if ($pResp.Headers['Set-Cookie']) { Write-Output ('  Set-Cookie: ' + [string]$pResp.Headers['Set-Cookie']) }
+        if ($pResp.Headers['Token']) { Write-Output ('  Token header: ' + [string]$pResp.Headers['Token']) }
         if ($names.Count -gt 0) { Write-Output ('  text fields: ' + ($names -join ', ')) }
         Write-Output ('  saved: ' + $pFile)
     } catch {
@@ -498,6 +500,69 @@ if ($portalOrigin) {
         } catch {
             Write-Output ('  JS fetch failed (' + $jsPath + '): ' + $_.Exception.Message)
         }
+    }
+}
+
+# ---- Step 10: ACF Test Data search (looking for sensorID) ----
+Write-Output 'Step 10: ACF Test Data search...'
+$acfMatch = $null
+foreach ($fc in $framesToScan) {
+    $m = [regex]::Match($fc, "openPage\(\s*\d+\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*\)[^>]*>\s*ACF Test Data", 'IgnoreCase')
+    if ($m.Success) { $acfMatch = $m; break }
+}
+if (-not $acfMatch) {
+    Write-Output '  ACF Test Data not found in the menu.'
+} elseif (-not $sn) {
+    Write-Output '  no SN provided.'
+} else {
+    $acfUrl = $acfMatch.Groups[1].Value
+    $acfOrigin = (New-Object System.Uri($acfUrl)).GetLeftPart([System.UriPartial]::Authority)
+    $acfBody = 'p=' + $acfMatch.Groups[2].Value + '&p=' + $acfMatch.Groups[3].Value + '&p=' + $acfMatch.Groups[4].Value + '&userID=' + $acfMatch.Groups[5].Value
+    try {
+        $acfPage = Invoke-WebRequest -Uri $acfUrl -Method Post -Body $acfBody -ContentType 'application/x-www-form-urlencoded' -WebSession $session -UseBasicParsing
+        $acfHtml = $acfPage.Content
+        $fields = Get-FormFields $acfHtml
+
+        $tokenVal = ''
+        $tokM = [regex]::Match($acfHtml, '<input\b[^>]*\bname="token"[^>]*>', 'IgnoreCase')
+        if ($tokM.Success) {
+            $tv = [regex]::Match($tokM.Value, 'value="([^"]*)"', 'IgnoreCase')
+            if ($tv.Success) { $tokenVal = $tv.Groups[1].Value }
+        }
+
+        $searchFields = @{}
+        foreach ($k in $fields.Keys) {
+            if ($k -eq 'token') { continue }
+            $searchFields[$k] = $fields[$k]
+        }
+        if (-not $searchFields.ContainsKey('MCType') -or -not $searchFields['MCType']) { $searchFields['MCType'] = 'acfbondnewdatabak' }
+        $searchFields['SearchType'] = 'SN'
+        $searchFields['Condition'] = $sn
+        $searchFields['starttime'] = '2026/06/01 00:00:00'
+        $searchFields['endtime'] = '2026/08/08 23:59:59'
+
+        $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
+        $sb = New-Object System.Text.StringBuilder
+        foreach ($k in $searchFields.Keys) {
+            [void]$sb.Append('--' + $boundary + "`r`n")
+            [void]$sb.Append('Content-Disposition: form-data; name="' + $k + '"' + "`r`n`r`n")
+            [void]$sb.Append([string]$searchFields[$k] + "`r`n")
+        }
+        [void]$sb.Append('--' + $boundary + "--`r`n")
+
+        $headers = @{}
+        if ($tokenVal) { $headers['Authorization'] = 'Bearer ' + $tokenVal }
+        Write-Output ('  search: MCType=' + $searchFields['MCType'] + ' SearchType=' + $searchFields['SearchType'] + ' Condition=' + $sn + ' token=' + $tokenVal)
+        $sResp = Invoke-WebRequest -Uri ($acfOrigin + '/ReportPortal/Search') -Method Post -Body $sb.ToString() -ContentType ('multipart/form-data; boundary=' + $boundary) -Headers $headers -WebSession $session -UseBasicParsing -TimeoutSec 120
+        $sHtml = $sResp.Content
+        $sFile = Join-Path $BASE_DIR 'portal_search_acf.html'
+        $sHtml | Out-File -FilePath $sFile -Encoding UTF8
+        Write-Output ('  status=' + [int]$sResp.StatusCode + ' length=' + $sHtml.Length + ' saved: ' + $sFile)
+        $visible = ($sHtml -replace '<[^>]+>', ' ') -replace '\s+', ' '
+        if ($visible.Length -gt 300) { $visible = $visible.Substring(0, 300) }
+        Write-Output ('  preview: ' + $visible)
+    } catch {
+        Write-Output ('  ACF search failed: ' + $_.Exception.Message)
     }
 }
 Write-Output 'Done.'
