@@ -570,9 +570,11 @@ if (-not $acfMatch) {
             $searchFields[$k] = $fields[$k]
         }
         # decode HTML entities (e.g. OtherValue contains &quot; in the page source)
+        $decodedFields = @{}
         foreach ($k in $searchFields.Keys) {
-            $searchFields[$k] = [System.Net.WebUtility]::HtmlDecode([string]$searchFields[$k])
+            $decodedFields[$k] = [System.Net.WebUtility]::HtmlDecode([string]$searchFields[$k])
         }
+        $searchFields = $decodedFields
         if (-not $searchFields.ContainsKey('MCType') -or -not $searchFields['MCType']) { $searchFields['MCType'] = 'acfbondnewdatabak' }
         if ($pick) { $searchFields['SearchType'] = $pick } else { $searchFields['SearchType'] = 'SN' }
         $searchFields['Condition'] = $sn
