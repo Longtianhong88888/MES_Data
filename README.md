@@ -12,14 +12,19 @@
 
 ## 输出说明
 
-- 页面返回主系统 frameset → 脚本会用同一会话抓取 top/left/home 三个 frame 验证登录态;
-  如果 frame 里出现"登入已過期"跳转,说明会话无效,需要走 `login.aspx` 真正登录流程
-- 会话无效时,脚本会自动抓取 `login.aspx` 并列出表单字段,保存为 `login_page.html`,
-  供分析真实登录方式
-- 页面仍包含密码输入框(`type="password"`)→ 登录失败,或需要验证码/额外认证
-- 登录后返回的页面会保存为 `login_result.html`,可以用浏览器打开检查
-- 验证用的 frame 页面保存为 `frame_1.html` / `frame_2.html` / `frame_3.html`
+- 脚本自动完成 ASP.NET 登录:GET `login.aspx` → 解析 `__VIEWSTATE`/`__EVENTVALIDATION`
+  → POST 账号密码 → 打开 `index.aspx` 应用入口
+- frame 中出现"登入已過期"跳转 = 会话无效;全部正常加载 = 登录成功
+- 登录成功后扫描 top/left/home 三个 frame,统计链接数量和疑似下载资源
+- 过程页面保存:`login_page.html`、`login_post_result.html`、`login_result.html`、
+  `frame_1.html` / `frame_2.html` / `frame_3.html`
 - 完整日志保存在 `login.log`
+
+## 常见问题
+
+- 输出 `LOGIN FAILED` → 检查 `config.json` 里的账号密码
+- 登录成功但 frame 仍提示会话失效 → 站点可能升级了登录方式(如验证码),把
+  `login_page.html` 发回分析
 
 ## 安全说明
 

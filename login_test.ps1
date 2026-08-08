@@ -1,9 +1,12 @@
-# login_test.ps1 - quick auto-login test for the internal site
-# Zero-install: uses Windows built-in PowerShell 5.1 only. No Python needed.
+# login_test.ps1 - auto-login + resource scan for the internal MES site
+# Zero-install: uses Windows built-in PowerShell 5.1 only.
 #
-# Usage:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File login_test.ps1
-#   (or just double-click login_windows.bat)
+# Flow:
+#   1. GET login.aspx, parse ASP.NET hidden fields (__VIEWSTATE etc.)
+#   2. POST credentials + hidden fields to login.aspx
+#   3. Open the app entry URL from config.json
+#   4. Fetch top/left/home frames, verify the session is valid
+#   5. Count links / download-like resources found in the frames
 
 param(
     [string]$Username = '',
@@ -14,153 +17,147 @@ $ErrorActionPreference = 'Stop'
 
 $BASE_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $CONFIG_PATH = Join-Path $BASE_DIR 'config.json'
-$RESULT_HTML = Join-Path $BASE_DIR 'login_result.html'
 
 $loginUrl = ''
 $username = $Username
 $password = $Password
-$usernameField = 'username'
-$passwordField = 'password'
-$extraFields = @{}
 
-# Load config.json if present (credentials stay local, never committed)
 if (Test-Path $CONFIG_PATH) {
     $config = Get-Content -Path $CONFIG_PATH -Raw -Encoding UTF8 | ConvertFrom-Json
     if (-not $loginUrl) { $loginUrl = $config.login_url }
     if (-not $username)  { $username = $config.username }
     if (-not $password)  { $password = $config.password }
-    if ($config.login_form) {
-        if ($config.login_form.username_field) { $usernameField = $config.login_form.username_field }
-        if ($config.login_form.password_field) { $passwordField = $config.login_form.password_field }
-        if ($config.login_form.extra_fields) {
-            $config.login_form.extra_fields.PSObject.Properties | ForEach-Object {
-                $extraFields[$_.Name] = $_.Value
-            }
-        }
-    }
 }
 
-# Prompt for anything still missing
-if (-not $loginUrl) { $loginUrl = Read-Host 'Login URL (e.g. http://server:8081/login)' }
+if (-not $loginUrl) { $loginUrl = Read-Host 'App entry URL (index.aspx?project=...&custom=...&num=...)' }
 if (-not $username) { $username = Read-Host 'Username' }
 if (-not $password) { $password = Read-Host 'Password' }
 
-$body = @{
-    $usernameField = $username
-    $passwordField = $password
+function Get-FormValue([string]$html, [string]$field) {
+    $tag = [regex]::Match($html, '<input\b[^>]*\bname="' + [regex]::Escape($field) + '"[^>]*>', 'IgnoreCase').Value
+    if (-not $tag) { return '' }
+    $m = [regex]::Match($tag, 'value="([^"]*)"', 'IgnoreCase')
+    if ($m.Success) { return $m.Groups[1].Value }
+    return ''
 }
-foreach ($k in $extraFields.Keys) {
-    $body[$k] = $extraFields[$k]
-}
-
-Write-Output ('Target: ' + $loginUrl)
-Write-Output ('User:   ' + $username)
 
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $session.UserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-Write-Output 'Sending login request...'
+$base = New-Object System.Uri($loginUrl)
+$origin = $base.GetLeftPart([System.UriPartial]::Authority)
+$loginPageUrl = $origin + '/login.aspx'
 
-try {
-    $resp = Invoke-WebRequest -Uri $loginUrl -Method Post -Body $body -WebSession $session -UseBasicParsing -MaximumRedirection 5
-} catch {
-    Write-Output ('HTTP error: ' + $_.Exception.Message)
-    Write-Output 'Login test FAILED (network or server error).'
+Write-Output ('Target app: ' + $loginUrl)
+Write-Output ('User:       ' + $username)
+Write-Output ('Login page: ' + $loginPageUrl)
+
+# ---- Step 1: GET the login page ----
+Write-Output 'Step 1: fetching login page...'
+$lpResp = Invoke-WebRequest -Uri $loginPageUrl -WebSession $session -UseBasicParsing
+$lpResp.Content | Out-File -FilePath (Join-Path $BASE_DIR 'login_page.html') -Encoding UTF8
+
+$vs  = Get-FormValue $lpResp.Content '__VIEWSTATE'
+$vsg = Get-FormValue $lpResp.Content '__VIEWSTATEGENERATOR'
+$ev  = Get-FormValue $lpResp.Content '__EVENTVALIDATION'
+if (-not $vs -or -not $ev) {
+    Write-Output 'ERROR: login page does not contain the expected ASP.NET hidden fields.'
     exit 1
 }
 
-$finalUrl = $resp.BaseResponse.ResponseUri.AbsoluteUri
-$html = $resp.Content
-Write-Output ('HTTP status: ' + [int]$resp.StatusCode)
-Write-Output ('Final URL:   ' + $finalUrl)
-Write-Output ('Cookies:     ' + $session.Cookies.Count)
+$btnTag = [regex]::Match($lpResp.Content, '<input\b[^>]*\bname="' + [regex]::Escape('Login1$LoginImageButton') + '"[^>]*>', 'IgnoreCase').Value
+$btnValue = ''
+$bm = [regex]::Match($btnTag, 'value="([^"]*)"', 'IgnoreCase')
+if ($bm.Success) { $btnValue = $bm.Groups[1].Value }
 
-try {
-    $html | Out-File -FilePath $RESULT_HTML -Encoding UTF8
-    Write-Output ('Saved response page: ' + $RESULT_HTML)
-} catch {
-    Write-Output 'Could not save response page.'
+# ---- Step 2: POST the login form ----
+Write-Output 'Step 2: posting login form...'
+$body = @{
+    '__LASTFOCUS' = ''
+    '__EVENTTARGET' = ''
+    '__EVENTARGUMENT' = ''
+    '__VIEWSTATE' = $vs
+    '__VIEWSTATEGENERATOR' = $vsg
+    '__EVENTVALIDATION' = $ev
+    'Login1$useridtb' = $username
+    'Login1$userpwdtb' = $password
+    'Login1$LoginImageButton' = $btnValue
 }
 
-# Content-based judgement: this site stays on index.aspx after login and returns
-# the main frameset shell (top/left/home frames). A login form contains a password field.
-$hasLoginForm = $html -match 'type\s*=\s*["'']password["'']'
-$hasFrameset  = $html -match '<frameset'
+$loginResp = Invoke-WebRequest -Uri $loginPageUrl -Method Post -Body $body -WebSession $session -UseBasicParsing -MaximumRedirection 10
+$loginHtml = $loginResp.Content
+Write-Output ('Login POST status: ' + [int]$loginResp.StatusCode)
+Write-Output ('Login POST final:  ' + $loginResp.BaseResponse.ResponseUri.AbsoluteUri)
+$loginHtml | Out-File -FilePath (Join-Path $BASE_DIR 'login_post_result.html') -Encoding UTF8
 
-if ($hasFrameset) {
-    Write-Output 'Result: main app frameset returned (POST accepted).'
-
-    # Verify the session by fetching each frame page (top/left/home) with the
-    # same session. An expired/invalid session returns the frames with an
-    # injected "login expired" script (redirect to login.aspx) instead of content.
-    $base = New-Object System.Uri($loginUrl)
-    $frameMatches = [regex]::Matches($html, '<frame\b[^>]*\bsrc\s*=\s*["''](?<src>[^"'']+)["'']', 'IgnoreCase')
-    Write-Output ('Frames found: ' + $frameMatches.Count)
-    $frameIndex = 0
-    $usernameFound = $false
-    $sessionInvalid = $false
-    foreach ($fm in $frameMatches) {
-        $frameIndex++
-        if ($frameIndex -gt 3) { break }
-        $src = $fm.Groups['src'].Value
-        $frameUri = New-Object System.Uri($base, $src)
-        $frameUrl = $frameUri.AbsoluteUri
-        Write-Output ('Fetching frame ' + $frameIndex + ': ' + $frameUrl)
-        try {
-            $frameResp = Invoke-WebRequest -Uri $frameUrl -WebSession $session -UseBasicParsing
-            $frameFile = Join-Path $BASE_DIR ('frame_' + $frameIndex + '.html')
-            $frameResp.Content | Out-File -FilePath $frameFile -Encoding UTF8
-            if ($frameResp.Content -match 'login\.aspx|window\.top\.location') {
-                Write-Output ('Frame ' + $frameIndex + ': SESSION INVALID (login-expired message found).')
-                $sessionInvalid = $true
-            } elseif ($frameResp.Content -match [regex]::Escape($username)) {
-                Write-Output ('Confirmed: username "' + $username + '" found in frame ' + $frameIndex + '.')
-                $usernameFound = $true
-            } else {
-                Write-Output ('Frame ' + $frameIndex + ' fetched OK (length ' + $frameResp.Content.Length + '), username not shown here.')
-            }
-        } catch {
-            Write-Output ('Frame ' + $frameIndex + ' fetch failed: ' + $_.Exception.Message)
-        }
-    }
-    if ($usernameFound) {
-        Write-Output 'Result: logged-in session confirmed by page content.'
-        exit 0
-    }
-    if ($sessionInvalid) {
-        Write-Output 'Result: session is NOT authenticated - this site needs the real login page flow.'
-        # Probe the real login page so we can build a proper login POST.
-        $origin = $base.GetLeftPart([System.UriPartial]::Authority)
-        $loginPageUrl = $origin + '/login.aspx'
-        Write-Output ('Probing login page: ' + $loginPageUrl)
-        try {
-            $lpResp = Invoke-WebRequest -Uri $loginPageUrl -WebSession $session -UseBasicParsing
-            $lpResp.Content | Out-File -FilePath (Join-Path $BASE_DIR 'login_page.html') -Encoding UTF8
-            $inputs = [regex]::Matches($lpResp.Content, '<input\b[^>]*>', 'IgnoreCase')
-            Write-Output ('Login page input fields (' + $inputs.Count + '):')
-            foreach ($inp in $inputs) {
-                $nm = [regex]::Match($inp.Value, 'name\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-                $tp = [regex]::Match($inp.Value, 'type\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-                $name = ''
-                $type = ''
-                if ($nm.Success) { $name = $nm.Groups[1].Value }
-                if ($tp.Success) { $type = $tp.Groups[1].Value }
-                Write-Output ('  - name=' + $name + ' type=' + $type)
-            }
-            if ($lpResp.Content -match 'captcha|verifycode|verify_code') {
-                Write-Output 'WARNING: login page contains a captcha-like field.'
-            }
-        } catch {
-            Write-Output ('Login page probe failed: ' + $_.Exception.Message)
-        }
-    } else {
-        Write-Output 'Result: frames fetched but could not confirm the session from content.'
-    }
-    exit 0
-} elseif ($hasLoginForm) {
-    Write-Output 'Result: response still contains a password field -> login FAILED.'
+$stillLoginPage = $loginResp.BaseResponse.ResponseUri.AbsoluteUri -match 'login\.aspx' -or $loginHtml -match [regex]::Escape('Login1$userpwdtb')
+if ($stillLoginPage) {
+    Write-Output 'Result: LOGIN FAILED - server returned the login page again (check credentials).'
     exit 1
-} else {
-    Write-Output 'Result: cannot tell from page content, check login_result.html.'
-    exit 2
 }
+
+# ---- Step 3: open the app entry ----
+Write-Output 'Step 3: opening app entry...'
+$appResp = Invoke-WebRequest -Uri $loginUrl -WebSession $session -UseBasicParsing
+$appHtml = $appResp.Content
+$appHtml | Out-File -FilePath (Join-Path $BASE_DIR 'login_result.html') -Encoding UTF8
+
+if ($appHtml -notmatch '<frameset') {
+    Write-Output 'ERROR: app entry did not return the frameset page.'
+    exit 1
+}
+
+# ---- Step 4: verify the session via frames ----
+Write-Output 'Step 4: verifying session via frames...'
+$frameMatches = [regex]::Matches($appHtml, '<frame\b[^>]*\bsrc\s*=\s*["''](?<src>[^"'']+)["'']', 'IgnoreCase')
+Write-Output ('Frames found: ' + $frameMatches.Count)
+$frameIndex = 0
+$sessionValid = $false
+$framesToScan = @()
+foreach ($fm in $frameMatches) {
+    $frameIndex++
+    if ($frameIndex -gt 3) { break }
+    $src = $fm.Groups['src'].Value
+    $frameUri = New-Object System.Uri($base, $src)
+    $frameUrl = $frameUri.AbsoluteUri
+    Write-Output ('Fetching frame ' + $frameIndex + ': ' + $frameUrl)
+    try {
+        $frameResp = Invoke-WebRequest -Uri $frameUrl -WebSession $session -UseBasicParsing
+        $frameFile = Join-Path $BASE_DIR ('frame_' + $frameIndex + '.html')
+        $frameResp.Content | Out-File -FilePath $frameFile -Encoding UTF8
+        if ($frameResp.Content -match 'login\.aspx|window\.top\.location') {
+            Write-Output ('Frame ' + $frameIndex + ': SESSION INVALID (login-expired message found).')
+        } else {
+            Write-Output ('Frame ' + $frameIndex + ': fetched OK (length ' + $frameResp.Content.Length + ').')
+            $sessionValid = $true
+            $framesToScan += $frameResp.Content
+        }
+    } catch {
+        Write-Output ('Frame ' + $frameIndex + ' fetch failed: ' + $_.Exception.Message)
+    }
+}
+
+if (-not $sessionValid) {
+    Write-Output 'Result: session still NOT authenticated after the login POST.'
+    exit 1
+}
+Write-Output 'Result: session authenticated OK.'
+
+# ---- Step 5: scan frames for resources ----
+Write-Output 'Step 5: scanning frames for resources...'
+$allHrefs = @()
+foreach ($fc in $framesToScan) {
+    $hrefs = [regex]::Matches($fc, 'href\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase') | ForEach-Object { $_.Groups[1].Value }
+    foreach ($h in $hrefs) { $allHrefs += $h }
+    $openPageCalls = [regex]::Matches($fc, 'openPage\([^)]*\)', 'IgnoreCase')
+    Write-Output ('  openPage() menu calls found: ' + $openPageCalls.Count)
+}
+$uniqueHrefs = $allHrefs | Where-Object { $_ -ne '#' } | Sort-Object -Unique
+Write-Output ('Unique non-empty hrefs: ' + $uniqueHrefs.Count)
+$fileLinks = $uniqueHrefs | Where-Object { $_ -match '\.(pdf|xls|xlsx|zip|rar|csv|doc|docx|txt|jpg|png)(\?|$)' -or $_ -match 'download|attach|getfile|file=' }
+Write-Output ('Download-like links: ' + $fileLinks.Count)
+if ($fileLinks.Count -gt 0) {
+    $fileLinks | ForEach-Object { Write-Output ('  - ' + $_) }
+}
+Write-Output 'Done.'
+exit 0
