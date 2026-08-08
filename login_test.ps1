@@ -9,7 +9,8 @@
 #   5. List the frames' menu links and download-like pages
 #   6. Fetch the SN trace query pages and report their query form structure
 #   7. Fill in the SN from config.json, submit the query, save the result page
-#   8. Switch the Test data page to SensorID mode and query with the SN
+#   8. Query Test data / ACF pages with the module SN
+#   9. Open MC IMG UpLoadInfo (ReportPortal) and report its required fields
 
 param(
     [string]$Username = '',
@@ -205,7 +206,8 @@ $snPages = @(
     'VTQReport/TestSNCurrentStateCre.aspx',
     'VTQReport/SnTestTrack.aspx',
     'VTQReport/FOLSnTestTrack.aspx',
-    'VTQReport/NHASNSearch.aspx'
+    'VTQReport/NHASNSearch.aspx',
+    'VTQReport/ACFscanning.aspx'
 )
 $pageIndex = 0
 foreach ($pageRel in $snPages) {
@@ -356,75 +358,123 @@ if (-not $sn) {
     }
 }
 
-# ---- Step 8: Test data SensorID query mode, using component IDs ----
-Write-Output 'Step 8: Test data SensorID queries...'
-$idsToQuery = @()
-if ($sn) { $idsToQuery = @($sn) }
-elseif ($componentIds.Count -gt 0) { $idsToQuery = @($componentIds) }
-
-if ($idsToQuery.Count -eq 0) {
-    Write-Output '  no ID to query (no component IDs and no SN).'
+# ---- Step 8: query test data / ACF pages with the module SN ----
+Write-Output 'Step 8: querying test data pages with the module SN...'
+$snQueryPages = @(
+    'VTQReport/VTQTestDataDownLoad.aspx'
+)
+if (-not $sn) {
+    Write-Output '  no SN provided.'
 } else {
-    Write-Output ('  IDs to query: ' + ($idsToQuery -join ', '))
-    $tdUrl = $origin + '/VTQReport/VTQTestDataDownLoad.aspx'
-    $qidIndex = 0
-    foreach ($qid in $idsToQuery) {
-        $qidIndex++
-        if ($qidIndex -gt 8) { break }
-        Write-Output ('  SensorID query ' + $qidIndex + ': ' + $qid)
+    $qIndex = 0
+    foreach ($rel in $snQueryPages) {
+        $qIndex++
+        $pageName = [regex]::Match($rel, '([^/]+)\.aspx$', 'IgnoreCase').Groups[1].Value
+        $qUrl = $origin + '/' + $rel
+        Write-Output ('Query ' + $qIndex + ' (' + $pageName + ') with SN: ' + $sn)
         try {
-            $tdResp = Invoke-WebRequest -Uri $tdUrl -WebSession $session -UseBasicParsing
-            $fields = Get-FormFields $tdResp.Content
+            $qResp = Invoke-WebRequest -Uri $qUrl -WebSession $session -UseBasicParsing
+            $qHtml = $qResp.Content
+
+            # switch to SensorID mode if the page has a mode radio
+            $fields = Get-FormFields $qHtml
             $body = @{}
             foreach ($k in $fields.Keys) { $body[$k] = $fields[$k] }
-            $body['selectradio'] = '3'
-            $body['__EVENTTARGET'] = 'selectradio$2'
-            $body['__EVENTARGUMENT'] = ''
-            $mResp = Invoke-WebRequest -Uri $tdUrl -Method Post -Body $body -WebSession $session -UseBasicParsing
-            $mHtml = $mResp.Content
-            $mFile = Join-Path $BASE_DIR ('testdata_mode_' + $qidIndex + '.html')
-            $mHtml | Out-File -FilePath $mFile -Encoding UTF8
-
-            $textInputs = [regex]::Matches($mHtml, '<input\b[^>]*\btype\s*=\s*["'']text["''][^>]*>', 'IgnoreCase')
-            $names = @()
-            foreach ($ti in $textInputs) {
-                $nm = [regex]::Match($ti.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-                if ($nm.Success) { $names += $nm.Groups[1].Value }
+            $switched = $false
+            if ($fields.ContainsKey('selectradio')) {
+                $body['selectradio'] = '3'
+                $body['__EVENTTARGET'] = 'selectradio$2'
+                $body['__EVENTARGUMENT'] = ''
+                $mResp = Invoke-WebRequest -Uri $qUrl -Method Post -Body $body -WebSession $session -UseBasicParsing
+                $qHtml = $mResp.Content
+                $switched = $true
             }
-            $sensorField = $names | Where-Object { $_ -match '(?i)sensor|sn' } | Select-Object -First 1
-            if (-not $sensorField) { $sensorField = $names | Select-Object -First 1 }
-            if (-not $sensorField) {
-                Write-Output '  no text field found in SensorID mode.'
+
+            $fields2 = Get-FormFields $qHtml
+            $snField = ''
+            foreach ($k in $fields2.Keys) {
+                if ($k -match '(?i)barcode|sn|sensor|serial') { $snField = $k; break }
+            }
+            if (-not $snField) {
+                foreach ($k in $fields2.Keys) { if ($k -match '(?i)txt|text') { $snField = $k; break } }
+            }
+            if (-not $snField) {
+                Write-Output ('  no text field found. fields: ' + (($fields2.Keys | Select-Object -First 12) -join ', '))
                 continue
             }
-            $fields2 = Get-FormFields $mHtml
-            $body2 = @{}
-            foreach ($k in $fields2.Keys) { $body2[$k] = $fields2[$k] }
-            $body2[$sensorField] = $qid
+            $body3 = @{}
+            foreach ($k in $fields2.Keys) { $body3[$k] = $fields2[$k] }
+            $body3[$snField] = $sn
             $trig = ''
-            $pb = [regex]::Match($mHtml, '__doPostBack\(\s*["'']([^"'']*(?:search|query)[^"'']*)["'']', 'IgnoreCase')
-            if (-not $pb.Success) { $pb = [regex]::Match($mHtml, '__doPostBack\(\s*["'']([^"'']*(?:button|btn)[^"'']*)["'']', 'IgnoreCase') }
+            $pb = [regex]::Match($qHtml, '__doPostBack\(\s*["'']([^"'']*(?:search|query)[^"'']*)["'']', 'IgnoreCase')
+            if (-not $pb.Success) { $pb = [regex]::Match($qHtml, '__doPostBack\(\s*["'']([^"'']*(?:button|btn)[^"'']*)["'']', 'IgnoreCase') }
             if ($pb.Success) { $trig = $pb.Groups[1].Value }
             if (-not $trig) {
-                $btnM = [regex]::Match($mHtml, '<input\b[^>]*\btype\s*=\s*["'']submit["''][^>]*>', 'IgnoreCase')
+                $btnM = [regex]::Match($qHtml, '<input\b[^>]*\btype\s*=\s*["'']submit["''][^>]*>', 'IgnoreCase')
                 if ($btnM.Success) {
                     $bn = [regex]::Match($btnM.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
                     if ($bn.Success) { $trig = $bn.Groups[1].Value }
                 }
             }
-            $body2['__EVENTTARGET'] = $trig
-            $body2['__EVENTARGUMENT'] = ''
-            Write-Output ('  field=' + $sensorField + ' trigger=' + $trig)
-            $rResp = Invoke-WebRequest -Uri $tdUrl -Method Post -Body $body2 -WebSession $session -UseBasicParsing -TimeoutSec 120
+            $body3['__EVENTTARGET'] = $trig
+            $body3['__EVENTARGUMENT'] = ''
+            Write-Output ('  field=' + $snField + ' trigger=' + $trig + ' modeSwitched=' + $switched)
+            $rResp = Invoke-WebRequest -Uri $qUrl -Method Post -Body $body3 -WebSession $session -UseBasicParsing -TimeoutSec 120
             $rHtml = $rResp.Content
-            $rFile = Join-Path $BASE_DIR ('testdata_result_' + $qidIndex + '.html')
+            $rFile = Join-Path $BASE_DIR ('td_query_' + $qIndex + '_' + $pageName + '.html')
             $rHtml | Out-File -FilePath $rFile -Encoding UTF8
             $trCount = [regex]::Matches($rHtml, '<tr\b', 'IgnoreCase').Count
-            $idInPage = $rHtml -match [regex]::Escape($qid)
-            Write-Output ('  result length=' + $rHtml.Length + ' rows=' + $trCount + ' idInPage=' + $idInPage + ' saved: ' + $rFile)
+            $idInPage = $rHtml -match [regex]::Escape($sn)
+            Write-Output ('  result length=' + $rHtml.Length + ' rows=' + $trCount + ' snInPage=' + $idInPage + ' saved: ' + $rFile)
         } catch {
             Write-Output ('  failed: ' + $_.Exception.Message)
         }
+    }
+}
+
+# ---- Step 9: ReportPortal pages (ACF Test Data / MC IMG UpLoadInfo) ----
+Write-Output 'Step 9: opening ReportPortal pages...'
+$portalLabels = @(
+    'ACF Test Data',
+    'MC IMG UpLoadInfo'
+)
+$portalIndex = 0
+foreach ($label in $portalLabels) {
+    $portalIndex++
+    $portalMatch = $null
+    foreach ($fc in $framesToScan) {
+        $m = [regex]::Match($fc, "openPage\(\s*\d+\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*\)[^>]*>\s*" + [regex]::Escape($label), 'IgnoreCase')
+        if ($m.Success) { $portalMatch = $m; break }
+    }
+    if (-not $portalMatch) {
+        Write-Output ('  ' + $label + ' not found in the menu.')
+        continue
+    }
+    $portalUrl = $portalMatch.Groups[1].Value
+    $device = $portalMatch.Groups[2].Value
+    $dbname = $portalMatch.Groups[3].Value
+    $plantid = $portalMatch.Groups[4].Value
+    $userid = $portalMatch.Groups[5].Value
+    Write-Output ('Portal ' + $portalIndex + ' (' + $label + '): ' + $portalUrl)
+    Write-Output ('  params: p=' + $device + ' p=' + $dbname + ' p=' + $plantid + ' userID=' + $userid)
+    $postBody = 'p=' + $device + '&p=' + $dbname + '&p=' + $plantid + '&userID=' + $userid
+    try {
+        $pResp = Invoke-WebRequest -Uri $portalUrl -Method Post -Body $postBody -ContentType 'application/x-www-form-urlencoded' -WebSession $session -UseBasicParsing -TimeoutSec 60
+        $pHtml = $pResp.Content
+        $shortName = ($label -replace '[^A-Za-z0-9]+', '_')
+        $pFile = Join-Path $BASE_DIR ('portal_' + $shortName + '.html')
+        $pHtml | Out-File -FilePath $pFile -Encoding UTF8
+        $textInputs = [regex]::Matches($pHtml, '<input\b[^>]*\btype\s*=\s*["'']text["''][^>]*>', 'IgnoreCase')
+        $names = @()
+        foreach ($ti in $textInputs) {
+            $nm = [regex]::Match($ti.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+            if ($nm.Success) { $names += $nm.Groups[1].Value }
+        }
+        Write-Output ('  status=' + [int]$pResp.StatusCode + ' length=' + $pHtml.Length + ' textFields=' + $names.Count)
+        if ($names.Count -gt 0) { Write-Output ('  text fields: ' + ($names -join ', ')) }
+        Write-Output ('  saved: ' + $pFile)
+    } catch {
+        Write-Output ('  portal request failed: ' + $_.Exception.Message)
     }
 }
 Write-Output 'Done.'
