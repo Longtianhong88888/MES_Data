@@ -438,6 +438,7 @@ $portalLabels = @(
     'ACF Test Data',
     'MC IMG UpLoadInfo'
 )
+$portalOrigin = ''
 $portalIndex = 0
 foreach ($label in $portalLabels) {
     $portalIndex++
@@ -451,6 +452,7 @@ foreach ($label in $portalLabels) {
         continue
     }
     $portalUrl = $portalMatch.Groups[1].Value
+    $portalOrigin = (New-Object System.Uri($portalUrl)).GetLeftPart([System.UriPartial]::Authority)
     $device = $portalMatch.Groups[2].Value
     $dbname = $portalMatch.Groups[3].Value
     $plantid = $portalMatch.Groups[4].Value
@@ -475,6 +477,27 @@ foreach ($label in $portalLabels) {
         Write-Output ('  saved: ' + $pFile)
     } catch {
         Write-Output ('  portal request failed: ' + $_.Exception.Message)
+    }
+}
+
+# Download the portal's shared JS so the query logic can be replicated
+if ($portalOrigin) {
+    $jsFiles = @(
+        '/Scripts/MyDefineScripts/MyDefineFunc.js',
+        '/DefineLibrary/Scripts/Mybasejs.js'
+    )
+    $jsIndex = 0
+    foreach ($jsPath in $jsFiles) {
+        $jsIndex++
+        $jsUrl = $portalOrigin + $jsPath
+        try {
+            $jsResp = Invoke-WebRequest -Uri $jsUrl -WebSession $session -UseBasicParsing
+            $jsFile = Join-Path $BASE_DIR ('portal_js_' + $jsIndex + '.js')
+            $jsResp.Content | Out-File -FilePath $jsFile -Encoding UTF8
+            Write-Output ('  JS saved: ' + $jsFile + ' (' + $jsResp.Content.Length + ' chars)')
+        } catch {
+            Write-Output ('  JS fetch failed (' + $jsPath + '): ' + $_.Exception.Message)
+        }
     }
 }
 Write-Output 'Done.'
