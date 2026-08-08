@@ -9,6 +9,7 @@
 #   5. List the frames' menu links and download-like pages
 #   6. Fetch the SN trace query pages and report their query form structure
 #   7. Fill in the SN from config.json, submit the query, save the result page
+#   8. Switch the Test data page to SensorID mode and query with the SN
 
 param(
     [string]$Username = '',
@@ -44,6 +45,37 @@ function Get-FormValue([string]$html, [string]$field) {
     $m = [regex]::Match($tag, 'value="([^"]*)"', 'IgnoreCase')
     if ($m.Success) { return $m.Groups[1].Value }
     return ''
+}
+
+function Get-FormFields([string]$html) {
+    $fields = @{}
+    foreach ($m in [regex]::Matches($html, '<input\b[^>]*>', 'IgnoreCase')) {
+        $tag = $m.Value
+        $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+        if (-not $nm.Success) { continue }
+        $name = $nm.Groups[1].Value
+        if ($name -eq '__EVENTTARGET' -or $name -eq '__EVENTARGUMENT') { continue }
+        $tp = [regex]::Match($tag, '\btype\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+        $type = ''
+        if ($tp.Success) { $type = $tp.Groups[1].Value.ToLower() }
+        if ($type -eq 'submit' -or $type -eq 'button' -or $type -eq 'image') { continue }
+        $vl = [regex]::Match($tag, '\bvalue\s*=\s*["'']([^"'']*)["'']', 'IgnoreCase')
+        $value = ''
+        if ($vl.Success) { $value = $vl.Groups[1].Value }
+        if (($type -eq 'radio' -or $type -eq 'checkbox') -and $tag -notmatch '\bchecked\b') { continue }
+        $fields[$name] = $value
+    }
+    foreach ($m in [regex]::Matches($html, '<select\b[^>]*>(.*?)</select>', 'IgnoreCase, Singleline')) {
+        $tag = $m.Value
+        $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+        if (-not $nm.Success) { continue }
+        $name = $nm.Groups[1].Value
+        $opt = [regex]::Match($tag, '<option\b[^>]*\bselected(?:=[^ >]*)?[^>]*\bvalue="([^"]*)"', 'IgnoreCase')
+        if (-not $opt.Success) { $opt = [regex]::Match($tag, '<option\b[^>]*\bvalue="([^"]*)"', 'IgnoreCase') }
+        if (-not $opt.Success) { continue }
+        $fields[$name] = $opt.Groups[1].Value
+    }
+    return $fields
 }
 
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
@@ -210,37 +242,6 @@ if (-not $sn) {
 } else {
     Write-Output ('  SN: ' + $sn)
 
-    function Get-FormFields([string]$html) {
-        $fields = @{}
-        foreach ($m in [regex]::Matches($html, '<input\b[^>]*>', 'IgnoreCase')) {
-            $tag = $m.Value
-            $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-            if (-not $nm.Success) { continue }
-            $name = $nm.Groups[1].Value
-            if ($name -eq '__EVENTTARGET' -or $name -eq '__EVENTARGUMENT') { continue }
-            $tp = [regex]::Match($tag, '\btype\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-            $type = ''
-            if ($tp.Success) { $type = $tp.Groups[1].Value.ToLower() }
-            if ($type -eq 'submit' -or $type -eq 'button' -or $type -eq 'image') { continue }
-            $vl = [regex]::Match($tag, '\bvalue\s*=\s*["'']([^"'']*)["'']', 'IgnoreCase')
-            $value = ''
-            if ($vl.Success) { $value = $vl.Groups[1].Value }
-            if (($type -eq 'radio' -or $type -eq 'checkbox') -and $tag -notmatch '\bchecked\b') { continue }
-            $fields[$name] = $value
-        }
-        foreach ($m in [regex]::Matches($html, '<select\b[^>]*>(.*?)</select>', 'IgnoreCase, Singleline')) {
-            $tag = $m.Value
-            $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
-            if (-not $nm.Success) { continue }
-            $name = $nm.Groups[1].Value
-            $opt = [regex]::Match($tag, '<option\b[^>]*\bselected(?:=[^ >]*)?[^>]*\bvalue="([^"]*)"', 'IgnoreCase')
-            if (-not $opt.Success) { $opt = [regex]::Match($tag, '<option\b[^>]*\bvalue="([^"]*)"', 'IgnoreCase') }
-            if (-not $opt.Success) { continue }
-            $fields[$name] = $opt.Groups[1].Value
-        }
-        return $fields
-    }
-
     $queryPages = @(
         'report/snsearch.aspx',
         'Tracking/sntotalinfo.aspx'
@@ -299,6 +300,67 @@ if (-not $sn) {
             Write-Output ('  failed: ' + $_.Exception.Message)
         }
     }
+}
+
+# ---- Step 8: Test data page, SensorID query mode ----
+Write-Output 'Step 8: switching Test data page to SensorID query mode...'
+$tdUrl = $origin + '/VTQReport/VTQTestDataDownLoad.aspx'
+try {
+    $tdResp = Invoke-WebRequest -Uri $tdUrl -WebSession $session -UseBasicParsing
+    $tdHtml = $tdResp.Content
+    $fields = Get-FormFields $tdHtml
+    $body = @{}
+    foreach ($k in $fields.Keys) { $body[$k] = $fields[$k] }
+    $body['selectradio'] = '3'
+    $body['__EVENTTARGET'] = 'selectradio$2'
+    $body['__EVENTARGUMENT'] = ''
+    $mResp = Invoke-WebRequest -Uri $tdUrl -Method Post -Body $body -WebSession $session -UseBasicParsing
+    $mHtml = $mResp.Content
+    $modeFile = Join-Path $BASE_DIR 'testdata_sensorid_mode.html'
+    $mHtml | Out-File -FilePath $modeFile -Encoding UTF8
+    $textInputs = [regex]::Matches($mHtml, '<input\b[^>]*\btype\s*=\s*["'']text["''][^>]*>', 'IgnoreCase')
+    $names = @()
+    foreach ($ti in $textInputs) {
+        $nm = [regex]::Match($ti.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+        if ($nm.Success) { $names += $nm.Groups[1].Value }
+    }
+    Write-Output ('SensorID mode page saved: ' + $modeFile)
+    Write-Output ('  text fields now: ' + ($names -join ', '))
+
+    if ($sn) {
+        $sensorField = $names | Where-Object { $_ -match '(?i)sensor|sn' } | Select-Object -First 1
+        if (-not $sensorField) { $sensorField = $names | Select-Object -First 1 }
+        if ($sensorField) {
+            $fields2 = Get-FormFields $mHtml
+            $body2 = @{}
+            foreach ($k in $fields2.Keys) { $body2[$k] = $fields2[$k] }
+            $body2[$sensorField] = $sn
+            $trig = ''
+            $btnM = [regex]::Match($mHtml, '<input\b[^>]*\btype\s*=\s*["'']submit["''][^>]*>', 'IgnoreCase')
+            if ($btnM.Success) {
+                $bn = [regex]::Match($btnM.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+                if ($bn.Success) { $trig = $bn.Groups[1].Value }
+            }
+            if (-not $trig) {
+                $pb = [regex]::Match($mHtml, '__doPostBack\(\s*["'']([^"'']*(?:search|query|btn)[^"'']*)["'']', 'IgnoreCase')
+                if ($pb.Success) { $trig = $pb.Groups[1].Value }
+            }
+            $body2['__EVENTTARGET'] = $trig
+            $body2['__EVENTARGUMENT'] = ''
+            Write-Output ('  filling ' + $sensorField + ' with SN, trigger=' + $trig)
+            $rResp = Invoke-WebRequest -Uri $tdUrl -Method Post -Body $body2 -WebSession $session -UseBasicParsing -TimeoutSec 120
+            $rHtml = $rResp.Content
+            $rFile = Join-Path $BASE_DIR 'testdata_sn_result.html'
+            $rHtml | Out-File -FilePath $rFile -Encoding UTF8
+            $trCount = [regex]::Matches($rHtml, '<tr\b', 'IgnoreCase').Count
+            $snInPage = $rHtml -match [regex]::Escape($sn)
+            Write-Output ('  result length=' + $rHtml.Length + ' rows=' + $trCount + ' snInPage=' + $snInPage + ' saved: ' + $rFile)
+        } else {
+            Write-Output '  no text field found in SensorID mode.'
+        }
+    }
+} catch {
+    Write-Output ('  failed: ' + $_.Exception.Message)
 }
 Write-Output 'Done.'
 exit 0
