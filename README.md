@@ -18,6 +18,8 @@
 - 登录成功后扫描 top/left/home 三个 frame,列出菜单链接
 - 逐个抓取 SN 追溯查询页(`sn_*.html`),报告查询表单的输入框和按钮结构,
   为下一步"输入模组 SN 查询全制程绑定信息"做准备
+- 在 `config.json` 里加 `"sn": "模组SN"` 后,脚本会自动在 `report/snsearch.aspx`
+  和 `Tracking/sntotalinfo.aspx` 上提交 SN 查询,结果保存为 `sn_result_*.html`
 - 过程页面保存:`login_page.html`、`login_post_result.html`、`login_result.html`、
   `frame_1.html` / `frame_2.html` / `frame_3.html`
 - 完整日志保存在 `login.log`

@@ -8,10 +8,12 @@
 #   4. Fetch top/left/home frames, verify the session is valid
 #   5. List the frames' menu links and download-like pages
 #   6. Fetch the SN trace query pages and report their query form structure
+#   7. Fill in the SN from config.json, submit the query, save the result page
 
 param(
     [string]$Username = '',
-    [string]$Password = ''
+    [string]$Password = '',
+    [string]$Sn = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,12 +24,14 @@ $CONFIG_PATH = Join-Path $BASE_DIR 'config.json'
 $loginUrl = ''
 $username = $Username
 $password = $Password
+$sn = $Sn
 
 if (Test-Path $CONFIG_PATH) {
     $config = Get-Content -Path $CONFIG_PATH -Raw -Encoding UTF8 | ConvertFrom-Json
     if (-not $loginUrl) { $loginUrl = $config.login_url }
     if (-not $username)  { $username = $config.username }
     if (-not $password)  { $password = $config.password }
+    if (-not $sn -and $config.sn) { $sn = [string]$config.sn }
 }
 
 if (-not $loginUrl) { $loginUrl = Read-Host 'App entry URL (index.aspx?project=...&custom=...&num=...)' }
@@ -159,20 +163,24 @@ Write-Output ('Unique non-empty hrefs: ' + $uniqueHrefs.Count)
 # ---- Step 6: inspect the SN trace query pages ----
 Write-Output 'Step 6: inspecting SN trace query pages...'
 $snPages = @(
-    'VTQTestSNCurrentState.aspx',
-    'TestSnCurrentStatus.aspx',
-    'TestSNCurrentStateNew.aspx',
-    'VTQTestSNCurrentStateNew.aspx',
-    'VTTestSnCurrentStateSorting.aspx',
-    'TestSNCurrentStateCre.aspx',
-    'SnTestTrack.aspx',
-    'FOLSnTestTrack.aspx',
-    'NHASNSearch.aspx'
+    'report/snsearch.aspx',
+    'Tracking/sntotalinfo.aspx',
+    'VTQReport/VTQTestSNCurrentState.aspx',
+    'VTQReport/TestSnCurrentStatus.aspx',
+    'VTQReport/TestSNCurrentStateNew.aspx',
+    'VTQReport/VTQTestSNCurrentStateNew.aspx',
+    'VTQReport/VTTestSnCurrentStateSorting.aspx',
+    'VTQReport/TestSNCurrentStateCre.aspx',
+    'VTQReport/SnTestTrack.aspx',
+    'VTQReport/FOLSnTestTrack.aspx',
+    'VTQReport/NHASNSearch.aspx'
 )
 $pageIndex = 0
-foreach ($pageName in $snPages) {
+foreach ($pageRel in $snPages) {
     $pageIndex++
-    $snUrl = $origin + '/VTQReport/' + $pageName
+    $pageName = [regex]::Match($pageRel, '([^/]+)\.aspx$', 'IgnoreCase').Groups[1].Value
+    if (-not $pageName) { $pageName = 'page' + $pageIndex }
+    $snUrl = $origin + '/' + $pageRel
     Write-Output ('SN page ' + $pageIndex + ': ' + $snUrl)
     try {
         $sResp = Invoke-WebRequest -Uri $snUrl -WebSession $session -UseBasicParsing
@@ -192,6 +200,104 @@ foreach ($pageName in $snPages) {
         }
     } catch {
         Write-Output ('  failed: ' + $_.Exception.Message)
+    }
+}
+
+# ---- Step 7: submit the SN query and save the result page ----
+Write-Output 'Step 7: submitting SN query...'
+if (-not $sn) {
+    Write-Output '  No SN provided. Add "sn" to config.json or pass -Sn "..."'
+} else {
+    Write-Output ('  SN: ' + $sn)
+
+    function Get-FormFields([string]$html) {
+        $fields = @{}
+        foreach ($m in [regex]::Matches($html, '<input\b[^>]*>', 'IgnoreCase')) {
+            $tag = $m.Value
+            $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+            if (-not $nm.Success) { continue }
+            $name = $nm.Groups[1].Value
+            if ($name -eq '__EVENTTARGET' -or $name -eq '__EVENTARGUMENT') { continue }
+            $tp = [regex]::Match($tag, '\btype\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+            $type = ''
+            if ($tp.Success) { $type = $tp.Groups[1].Value.ToLower() }
+            if ($type -eq 'submit' -or $type -eq 'button' -or $type -eq 'image') { continue }
+            $vl = [regex]::Match($tag, '\bvalue\s*=\s*["'']([^"'']*)["'']', 'IgnoreCase')
+            $value = ''
+            if ($vl.Success) { $value = $vl.Groups[1].Value }
+            if (($type -eq 'radio' -or $type -eq 'checkbox') -and $tag -notmatch '\bchecked\b') { continue }
+            $fields[$name] = $value
+        }
+        foreach ($m in [regex]::Matches($html, '<select\b[^>]*>(.*?)</select>', 'IgnoreCase, Singleline')) {
+            $tag = $m.Value
+            $nm = [regex]::Match($tag, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+            if (-not $nm.Success) { continue }
+            $name = $nm.Groups[1].Value
+            $opt = [regex]::Match($tag, '<option\b[^>]*\bselected(?:=[^ >]*)?[^>]*\bvalue="([^"]*)"', 'IgnoreCase')
+            if (-not $opt.Success) { $opt = [regex]::Match($tag, '<option\b[^>]*\bvalue="([^"]*)"', 'IgnoreCase') }
+            if (-not $opt.Success) { continue }
+            $fields[$name] = $opt.Groups[1].Value
+        }
+        return $fields
+    }
+
+    $queryPages = @(
+        'report/snsearch.aspx',
+        'Tracking/sntotalinfo.aspx'
+    )
+    $qIndex = 0
+    foreach ($rel in $queryPages) {
+        $qIndex++
+        $pageName = [regex]::Match($rel, '([^/]+)\.aspx$', 'IgnoreCase').Groups[1].Value
+        $qUrl = $origin + '/' + $rel
+        Write-Output ('Query ' + $qIndex + ' (' + $pageName + '): ' + $qUrl)
+        try {
+            $qResp = Invoke-WebRequest -Uri $qUrl -WebSession $session -UseBasicParsing
+            $qHtml = $qResp.Content
+            $fields = Get-FormFields $qHtml
+
+            $snField = ''
+            foreach ($k in $fields.Keys) {
+                if ($k -match '(?i)sn|serial|barcode') { $snField = $k; break }
+            }
+            if (-not $snField) {
+                Write-Output ('  no SN-like field found. fields: ' + (($fields.Keys | Select-Object -First 12) -join ', '))
+                continue
+            }
+            Write-Output ('  SN field: ' + $snField)
+
+            $body = @{}
+            foreach ($k in $fields.Keys) { $body[$k] = $fields[$k] }
+            $body[$snField] = $sn
+
+            $trigger = ''
+            $btnM = [regex]::Match($qHtml, '<input\b[^>]*\btype\s*=\s*["'']submit["''][^>]*>', 'IgnoreCase')
+            if ($btnM.Success) {
+                $bn = [regex]::Match($btnM.Value, '\bname\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase')
+                if ($bn.Success) { $trigger = $bn.Groups[1].Value }
+            }
+            if (-not $trigger) {
+                $pb = [regex]::Match($qHtml, '__doPostBack\(\s*["'']([^"'']*(?:search|query|btn)[^"'']*)["'']\s*,\s*["'']*["'']*\s*\)', 'IgnoreCase')
+                if ($pb.Success) { $trigger = $pb.Groups[1].Value }
+            }
+            $body['__EVENTTARGET'] = $trigger
+            $body['__EVENTARGUMENT'] = ''
+            if ($trigger) {
+                Write-Output ('  trigger: ' + $trigger)
+            } else {
+                Write-Output '  no submit button / postback target found; posting with empty trigger'
+            }
+
+            $qRes = Invoke-WebRequest -Uri $qUrl -Method Post -Body $body -WebSession $session -UseBasicParsing -TimeoutSec 120
+            $qResHtml = $qRes.Content
+            $resFile = Join-Path $BASE_DIR ('sn_result_' + $qIndex + '_' + $pageName + '.html')
+            $qResHtml | Out-File -FilePath $resFile -Encoding UTF8
+            $trCount = [regex]::Matches($qResHtml, '<tr\b', 'IgnoreCase').Count
+            $snInPage = $qResHtml -match [regex]::Escape($sn)
+            Write-Output ('  result length=' + $qResHtml.Length + ' rows=' + $trCount + ' snInPage=' + $snInPage + ' saved: ' + $resFile)
+        } catch {
+            Write-Output ('  failed: ' + $_.Exception.Message)
+        }
     }
 }
 Write-Output 'Done.'
