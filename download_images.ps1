@@ -20,7 +20,11 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 $lists = @(Get-ChildItem -Path $ListDir -Filter '*images*.txt' -File -ErrorAction SilentlyContinue)
 if ($lists.Count -eq 0) {
-    Write-Output ('No image list files found in: ' + $ListDir)
+    # also look in the script folder (e.g. after unzipping a packed list)
+    $lists = @(Get-ChildItem -Path $BASE_DIR -Filter '*images*.txt' -File -ErrorAction SilentlyContinue)
+}
+if ($lists.Count -eq 0) {
+    Write-Output ('No image list files found in: ' + $ListDir + ' or ' + $BASE_DIR)
     exit 1
 }
 

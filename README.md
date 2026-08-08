@@ -37,8 +37,9 @@
 平行桌面 VM 无法直连。流程:
 
 1. VM 上运行 `login_test.ps1`,生成 `downloads\*images*.txt` 图片链接清单
-2. 把 `downloads` 目录拷到公司台式机(共享文件夹/U盘)
-3. 台式机上双击 `download_images.bat`,按清单批量下载图片到
+2. VM 上双击 `pack_lists.bat`,把清单打包成 `image_lists.zip`(只有几 KB)
+3. 把 zip 传到公司网盘,台式机下载解压
+4. 台式机上双击 `download_images.bat`,按清单批量下载图片到
    `downloads\images`
 - Test data 页面支持日期/批號/SensorID 三种查询模式;脚本会自动切换到
   SensorID 模式并用 SN 查询,结果保存为 `testdata_sn_result.html`
