@@ -20,6 +20,8 @@
   为下一步"输入模组 SN 查询全制程绑定信息"做准备
 - 在 `config.json` 里加 `"sn": "模组SN"` 后,脚本会自动在 `report/snsearch.aspx`
   和 `Tracking/sntotalinfo.aspx` 上提交 SN 查询,结果保存为 `sn_result_*.html`
+- SN search 的结果会自动解析为汇总表 + 站位轨迹 + 耗材记录,保存为
+  `sn_trace_report.txt`
 - Test data 页面支持日期/批號/SensorID 三种查询模式;脚本会自动切换到
   SensorID 模式并用 SN 查询,结果保存为 `testdata_sn_result.html`
 - 过程页面保存:`login_page.html`、`login_post_result.html`、`login_result.html`、

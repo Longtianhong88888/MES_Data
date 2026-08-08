@@ -296,6 +296,48 @@ if (-not $sn) {
             $trCount = [regex]::Matches($qResHtml, '<tr\b', 'IgnoreCase').Count
             $snInPage = $qResHtml -match [regex]::Escape($sn)
             Write-Output ('  result length=' + $qResHtml.Length + ' rows=' + $trCount + ' snInPage=' + $snInPage + ' saved: ' + $resFile)
+
+            if ($pageName -eq 'snsearch') {
+                # Parse the SN search result: summary row, station trace, consumables
+                $rows = [regex]::Matches($qResHtml, '<tr\b[^>]*>(.*?)</tr>', 'IgnoreCase, Singleline')
+                $stations = @()
+                $consumables = @()
+                $summaryRow = @()
+                foreach ($r in $rows) {
+                    $tds = @([regex]::Matches($r.Groups[1].Value, '<td\b[^>]*>(.*?)</td>', 'IgnoreCase, Singleline') | ForEach-Object { $_.Groups[1].Value.Trim() })
+                    if ($tds.Count -eq 2 -and $tds[0] -ne '站位' -and $tds[1] -match '^\d{4}-\d{2}-\d{2}') {
+                        $stations += [pscustomobject]@{ Station = $tds[0]; Time = $tds[1] }
+                    } elseif ($tds.Count -eq 12 -and $tds[0] -eq $sn) {
+                        $summaryRow = $tds
+                    } elseif ($tds.Count -eq 4 -and $tds[0] -match '^[A-Za-z]\d{4}-') {
+                        $consumables += [pscustomobject]@{ Material = $tds[0]; Lot = $tds[1]; Name = $tds[2]; Station = $tds[3] }
+                    }
+                }
+                $sumHeaders = @('SN','批號','EOL測試結果','FOL測試結果','SFC結果','線體','包號','包裝時間','箱號','銷單號','出貨地址','出貨時間')
+                $reportLines = New-Object System.Collections.Generic.List[string]
+                $reportLines.Add('==== SN 汇总 ====')
+                if ($summaryRow.Count -ge $sumHeaders.Count) {
+                    for ($i = 0; $i -lt $sumHeaders.Count; $i++) {
+                        $reportLines.Add(($sumHeaders[$i] + ': ' + $summaryRow[$i]))
+                    }
+                }
+                $reportLines.Add('')
+                $reportLines.Add(('==== 站位轨迹 (' + $stations.Count + ') ===='))
+                $idx = 0
+                foreach ($st in $stations) {
+                    $idx++
+                    $reportLines.Add(('  ' + $idx + '. ' + $st.Station + '  |  ' + $st.Time))
+                }
+                $reportLines.Add('')
+                $reportLines.Add(('==== 耗材记录 (' + $consumables.Count + ') ===='))
+                foreach ($cm in $consumables) {
+                    $reportLines.Add(('  ' + $cm.Material + ' | ' + $cm.Lot + ' | ' + $cm.Name + ' | ' + $cm.Station))
+                }
+                $reportFile = Join-Path $BASE_DIR 'sn_trace_report.txt'
+                $reportLines | Out-File -FilePath $reportFile -Encoding UTF8
+                Write-Output ('  PARSED: stations=' + $stations.Count + ' consumables=' + $consumables.Count)
+                Write-Output ('  report saved: ' + $reportFile)
+            }
         } catch {
             Write-Output ('  failed: ' + $_.Exception.Message)
         }
