@@ -643,6 +643,24 @@ if (-not $acfMatch) {
                     $imgListFile = Join-Path $dlDir ('acf_images_' + $mcIdx + '.txt')
                     $imgUrls | Out-File -FilePath $imgListFile -Encoding UTF8
                     Write-Output ('  image list saved: ' + $imgListFile)
+                    $imgN = 0
+                    foreach ($iu in $imgUrls) {
+                        $imgN++
+                        if ($imgN -gt 5) { break }
+                        $imgOut = Join-Path $dlDir ('acf_' + $mcIdx + '_' + $imgN + '.jpg')
+                        $ok = $false
+                        foreach ($cand in @($iu, ($iu -replace 'http://cma1\.fs\.com:8081', 'http://10.142.119.202:8081'))) {
+                            try {
+                                Invoke-WebRequest -Uri $cand -OutFile $imgOut -WebSession $session -UseBasicParsing -TimeoutSec 60
+                                Write-Output ('  image saved: ' + $imgOut + ' (' + (Get-Item $imgOut).Length + ' bytes)')
+                                $ok = $true
+                                break
+                            } catch {}
+                        }
+                        if (-not $ok) {
+                            Write-Output ('  image download failed (both hosts): ' + $iu.Substring(0, [Math]::Min(100, $iu.Length)))
+                        }
+                    }
                 }
             } catch {
                 Write-Output ('  search failed for ' + $mc.Id + ': ' + $_.Exception.Message)
@@ -774,6 +792,35 @@ if (-not $mcMatch) {
                 Write-Output ('    preview: ' + $vis)
                 if ($hrefs.Count -gt 0) {
                     Write-Output ('    links: ' + ($hrefs -join ' | '))
+                }
+                $imgHrefs = @([regex]::Matches($stHtml, 'href="(http://[^"]*\.(?:jpg|jpeg|png)[^"]*)"', 'IgnoreCase') | ForEach-Object { [System.Net.WebUtility]::HtmlDecode($_.Groups[1].Value) } | Sort-Object -Unique)
+                if ($imgHrefs.Count -gt 0) {
+                    $imgListFile = Join-Path $dlDir ('mcimg_images_' + $stIdx + '.txt')
+                    $imgHrefs | Out-File -FilePath $imgListFile -Encoding UTF8
+                    Write-Output ('    image list saved: ' + $imgListFile)
+                    $imgN = 0
+                    foreach ($iu in $imgHrefs) {
+                        $imgN++
+                        if ($imgN -gt 20) { break }
+                        $imgOut = Join-Path $dlDir ('mcimg_' + $stIdx + '_' + $imgN + '.jpg')
+                        try {
+                            Invoke-WebRequest -Uri $iu -OutFile $imgOut -WebSession $session -UseBasicParsing -TimeoutSec 60
+                            Write-Output ('    image saved: ' + $imgOut + ' (' + (Get-Item $imgOut).Length + ' bytes)')
+                        } catch {
+                            Write-Output ('    image download failed: ' + $_.Exception.Message)
+                        }
+                    }
+                }
+                $xlsm2 = [regex]::Match($stHtml, 'href="([^"]*\.xlsx[^"]*)"', 'IgnoreCase')
+                if ($xlsm2.Success) {
+                    $xlsUrl2 = [System.Net.WebUtility]::HtmlDecode($xlsm2.Groups[1].Value) -replace '\\', '/'
+                    try {
+                        $xlsOut = Join-Path $dlDir ('mcimg_' + $stIdx + '.xlsx')
+                        Invoke-WebRequest -Uri $xlsUrl2 -OutFile $xlsOut -WebSession $session -UseBasicParsing -TimeoutSec 120
+                        Write-Output ('    Excel saved: ' + $xlsOut + ' (' + (Get-Item $xlsOut).Length + ' bytes)')
+                    } catch {
+                        Write-Output ('    Excel download failed: ' + $_.Exception.Message)
+                    }
                 }
             } catch {
                 Write-Output ('    station search failed: ' + $_.Exception.Message)
