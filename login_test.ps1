@@ -602,6 +602,36 @@ if (-not $acfMatch) {
         $visible = ($sHtml -replace '<[^>]+>', ' ') -replace '\s+', ' '
         if ($visible.Length -gt 300) { $visible = $visible.Substring(0, 300) }
         Write-Output ('  preview: ' + $visible)
+
+        # download the generated Excel export and the station images
+        $dlDir = Join-Path $BASE_DIR 'downloads'
+        New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
+        $xlsm = [regex]::Match($sHtml, 'href="([^"]*\.xlsx[^"]*)"', 'IgnoreCase')
+        if ($xlsm.Success) {
+            $xlsUrl = [System.Net.WebUtility]::HtmlDecode($xlsm.Groups[1].Value) -replace '\\', '/'
+            Write-Output ('  Excel: ' + $xlsUrl)
+            try {
+                $xlsFile = Join-Path $dlDir 'acf_testdata.xlsx'
+                Invoke-WebRequest -Uri $xlsUrl -OutFile $xlsFile -WebSession $session -UseBasicParsing -TimeoutSec 120
+                Write-Output ('  Excel saved: ' + $xlsFile + ' (' + (Get-Item $xlsFile).Length + ' bytes)')
+            } catch {
+                Write-Output ('  Excel download failed: ' + $_.Exception.Message)
+            }
+        }
+        $imgUrls = @([regex]::Matches($sHtml, 'href="(http://cma1[^"]*\.jpg[^"]*)"', 'IgnoreCase') | ForEach-Object { [System.Net.WebUtility]::HtmlDecode($_.Groups[1].Value) })
+        Write-Output ('  ACF images found: ' + $imgUrls.Count)
+        if ($imgUrls.Count -gt 0) {
+            $imgListFile = Join-Path $dlDir 'acf_images.txt'
+            $imgUrls | Out-File -FilePath $imgListFile -Encoding UTF8
+            Write-Output ('  image list saved: ' + $imgListFile)
+            $firstImg = Join-Path $dlDir 'acf_test.jpg'
+            try {
+                Invoke-WebRequest -Uri $imgUrls[0] -OutFile $firstImg -WebSession $session -UseBasicParsing -TimeoutSec 60
+                Write-Output ('  test image saved: ' + $firstImg + ' (' + (Get-Item $firstImg).Length + ' bytes)')
+            } catch {
+                Write-Output ('  image download failed: ' + $_.Exception.Message)
+            }
+        }
     } catch {
         $errMsg = $_.Exception.Message
         try {
