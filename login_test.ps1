@@ -70,23 +70,48 @@ try {
 }
 
 $finalUrl = $resp.BaseResponse.ResponseUri.AbsoluteUri
+$html = $resp.Content
 Write-Output ('HTTP status: ' + [int]$resp.StatusCode)
 Write-Output ('Final URL:   ' + $finalUrl)
 Write-Output ('Cookies:     ' + $session.Cookies.Count)
 
 try {
-    $resp.Content | Out-File -FilePath $RESULT_HTML -Encoding UTF8
+    $html | Out-File -FilePath $RESULT_HTML -Encoding UTF8
     Write-Output ('Saved response page: ' + $RESULT_HTML)
 } catch {
     Write-Output 'Could not save response page.'
 }
 
-$isLoginPage = $finalUrl.TrimEnd('/').ToLower() -eq $loginUrl.TrimEnd('/').ToLower()
+# Content-based judgement: this site stays on index.aspx after login and returns
+# the main frameset shell (top/left/home frames). A login form contains a password field.
+$hasLoginForm = $html -match 'type\s*=\s*["'']password["'']'
+$hasFrameset  = $html -match '<frameset'
 
-if ($isLoginPage) {
-    Write-Output 'Result: still on the login page -> login FAILED or extra auth needed.'
+if ($hasFrameset) {
+    Write-Output 'Result: main app frameset returned -> login looks SUCCESSFUL.'
+
+    # Follow-up: fetch the first frame with the same session to verify it really works.
+    $m = [regex]::Match($html, 'src\s*=\s*["'']([^"'']+)["'']')
+    if ($m.Success) {
+        try {
+            $frameUrl = (New-Object System.Uri($loginUrl, $m.Groups[1].Value)).AbsoluteUri
+            Write-Output ('Verifying session via frame: ' + $frameUrl)
+            $frameResp = Invoke-WebRequest -Uri $frameUrl -WebSession $session -UseBasicParsing
+            $frameResp.Content | Out-File -FilePath (Join-Path $BASE_DIR 'frame_result.html') -Encoding UTF8
+            if ($frameResp.Content -match [regex]::Escape($username)) {
+                Write-Output ('Confirmed: username "' + $username + '" appears in the frame page.')
+            } else {
+                Write-Output 'Frame fetched OK (this frame does not show the username).'
+            }
+        } catch {
+            Write-Output ('Frame fetch failed: ' + $_.Exception.Message)
+        }
+    }
+    exit 0
+} elseif ($hasLoginForm) {
+    Write-Output 'Result: response still contains a password field -> login FAILED.'
     exit 1
 } else {
-    Write-Output 'Result: redirected away from the login page -> login looks SUCCESSFUL.'
-    exit 0
+    Write-Output 'Result: cannot tell from page content, check login_result.html.'
+    exit 2
 }

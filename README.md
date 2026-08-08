@@ -12,9 +12,11 @@
 
 ## 输出说明
 
-- `Final URL` 不再是登录页 → 自动登录成功
-- `Final URL` 仍是登录页 → 登录失败,或需要验证码/额外认证
+- 页面返回主系统 frameset(`<frameset>`)→ 自动登录成功,脚本还会用同一会话
+  抓取第一个 frame 页面验证登录态
+- 页面仍包含密码输入框(`type="password"`)→ 登录失败,或需要验证码/额外认证
 - 登录后返回的页面会保存为 `login_result.html`,可以用浏览器打开检查
+- 验证用的 frame 页面保存为 `frame_result.html`
 - 完整日志保存在 `login.log`
 
 ## 安全说明
