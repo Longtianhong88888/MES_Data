@@ -1,4 +1,4 @@
-﻿﻿# login_test.ps1 - auto-login + SN trace page discovery for the internal MES site
+﻿# login_test.ps1 - auto-login + SN trace page discovery for the internal MES site
 # Zero-install: uses Windows built-in PowerShell 5.1 only.
 #
 # Flow:
