@@ -533,6 +533,7 @@ if (-not $acfMatch) {
             $glResp = Invoke-WebRequest -Uri ($acfOrigin + '/ReportPortal/GetList') -Method Post -Body $glBody -WebSession $session -UseBasicParsing -TimeoutSec 60
             $glJson = $glResp.Content | ConvertFrom-Json
             Write-Output ('  GetList Resultflag=' + $glJson.Resultflag + ' Message=' + $glJson.Message)
+            Write-Output ('  GetList raw: ' + $glResp.Content)
             if ($glJson.Resultflag -eq '1') {
                 $opts = $glJson.Resultvalue
                 $optsJson = $opts | ConvertTo-Json -Depth 6 -Compress
@@ -571,8 +572,8 @@ if (-not $acfMatch) {
         if (-not $searchFields.ContainsKey('MCType') -or -not $searchFields['MCType']) { $searchFields['MCType'] = 'acfbondnewdatabak' }
         if ($pick) { $searchFields['SearchType'] = $pick } else { $searchFields['SearchType'] = 'SN' }
         $searchFields['Condition'] = $sn
-        $searchFields['starttime'] = ''
-        $searchFields['endtime'] = ''
+        $searchFields['starttime'] = '06/01/2026 00:00'
+        $searchFields['endtime'] = '08/08/2026 23:59'
 
         $boundary = '----CodexBoundary' + [guid]::NewGuid().ToString('N')
         $sb = New-Object System.Text.StringBuilder
