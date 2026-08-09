@@ -26,5 +26,6 @@ run.log
 
 # 工具安装包
 /get-pip.py
+/SN_Report.exe
 *.7z
 *.zip
