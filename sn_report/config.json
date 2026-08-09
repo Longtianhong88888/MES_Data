@@ -1,0 +1,144 @@
+{
+  "sn_list_file": "sns.txt",
+  "analysis_window": {
+    "start": "2026-06-01 00:00",
+    "end": "2026-08-08 23:59"
+  },
+  "report": {
+    "output_dir": "output",
+    "download_dir": "downloads",
+    "ppt_name": "SN全制程追溯报告.pptx",
+    "slide_font": "Microsoft YaHei",
+    "download_images": false
+  },
+  "sn_search": {
+    "page": "report/snsearch.aspx",
+    "field": "sntextbox",
+    "button": "Button1"
+  },
+  "sntotalinfo_page": "Tracking/sntotalinfo.aspx",
+  "img_stations": [
+    {
+      "id": "cubepnpimguploadbak",
+      "label": "CUBEPNP"
+    },
+    {
+      "id": "aaimguploadbak",
+      "label": "AA"
+    },
+    {
+      "id": "LMimguploadbak",
+      "label": "LM"
+    },
+    {
+      "id": "aviimguploadbak",
+      "label": "AVI"
+    },
+    {
+      "id": "frtopimguploadbak",
+      "label": "FRTOP"
+    },
+    {
+      "id": "acfflipimguploadbak",
+      "label": "ACFFlip"
+    }
+  ],
+  "acf_mc_types": [
+    {
+      "id": "acfbondnewdatabak",
+      "label": "ACF上料機"
+    },
+    {
+      "id": "acfunloadbondnewdatabak",
+      "label": "ACF下料機"
+    },
+    {
+      "id": "acfmaindatanewbak",
+      "label": "ACF主機"
+    }
+  ],
+  "column_keywords": {
+    "station": [
+      "站位",
+      "工序",
+      "站点",
+      "站點",
+      "工序名"
+    ],
+    "time": [
+      "进站时间",
+      "進站時間",
+      "开始时间",
+      "開始時間",
+      "Start_Time",
+      "start_time",
+      "时间",
+      "時間"
+    ],
+    "mc": [
+      "机台",
+      "機台",
+      "设备",
+      "設備",
+      "MC_ID",
+      "Mc_Id",
+      "machine"
+    ],
+    "carrier": [
+      "载板",
+      "載板",
+      "Carrier_ID",
+      "carrier_id",
+      "carrier"
+    ],
+    "pocket": [
+      "穴位",
+      "Cavity",
+      "cavity",
+      "Pocket",
+      "pocket"
+    ],
+    "head": [
+      "Head_ID",
+      "head_id",
+      "Head"
+    ],
+    "material": [
+      "材料",
+      "物料",
+      "耗材",
+      "名称",
+      "名稱",
+      "Lot",
+      "lot",
+      "批号",
+      "批號",
+      "LOT_ID"
+    ],
+    "summary": [
+      "批号",
+      "批號",
+      "线体",
+      "線體",
+      "包号",
+      "包號",
+      "SFC",
+      "测试结果",
+      "測試結果",
+      "包装",
+      "包裝",
+      "箱号",
+      "箱號"
+    ]
+  },
+  "c4": {
+    "enabled": false,
+    "url": "http://10.151.128.35:8095/api/MachineParameter/GetInformationDT",
+    "plant_id": "",
+    "device": "",
+    "token": "",
+    "type": "8S01",
+    "extra_params": {},
+    "columns": []
+  }
+}

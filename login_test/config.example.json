@@ -1,9 +1,7 @@
 {
-  "login_url": "http://10.151.128.45:8081/login",
+  "login_url": "http://YOUR-SERVER:8081/login",
   "username": "your-username",
   "password": "your-password",
-  "resource_url": "http://10.151.128.45:8081/your/resource/page",
-  "download_dir": "downloads",
   "login_form": {
     "username_field": "username",
     "password_field": "password",

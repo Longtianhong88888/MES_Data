@@ -19,6 +19,25 @@
   (实际节点 `10.151.130.225/226:8091`,TEMP 导出可直连)
 - PowerShell 5.1 解析含中文的 .ps1 **必须带 UTF-8 BOM**;bat 必须 CRLF
 
+## 运行环境:Windows 便携 Python(重要,勿再丢失)
+
+- 2026-08-08 已下载 **Python 3.11.9 embeddable(x86-64/amd64)**
+  (`python-3.11.9-embed-amd64.zip`,来源 python.org 或镜像),解压到
+  **`MES_Data/python/`**(含 python.exe / python311.dll / python311.zip /
+  python311._pth / python.cat)
+- 与项目 `lib/` 里的 cp311 离线依赖配套(PIL/lxml 的 .pyd、openpyxl/pptx 的
+  .pyc magic `a70d0d0a` 都是 3.11 x64);**不能用 3.10 的打包程序替代**
+- ⚠️ 2026-08-09 检查时 `MES_Data/python/` **已不存在**,需要恢复:
+  ① 先看 Windows VM `C:\MES_Data-main\python\` 是否有;② 若无,重新下载
+  `https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip`
+- ⚠️⚠️ 2026-08-09 用户反馈:VM 系统会**自动删除下载的 python.exe**,Python 运行时
+  **不能常驻 VM**。login_windows.bat 仍可用是因为它只用系统自带 PowerShell。
+  对策(已实现):sn_report 提供 `build_windows.bat`,在能联网装 Python 的
+  Windows 机器上打成**免安装 exe**(`sn_report\dist\SN_Report.exe`),拷到 VM 运行;
+  config.py 已改为优先读运行目录下的 sn_report/config.json,兼容打包后使用。
+- 内嵌版注意:`python311._pth` 里 `#import site` 默认注释,装第三方包前要取消注释;
+  pip 用项目内 `get-pip.py` 引导(`python get-pip.py`)
+
 ## 工具链(仓库 Longtianhong88888/MES_Data,login_test 目录)
 
 | 文件 | 作用 |
@@ -92,3 +111,24 @@
 2. 可选增强:90+ 站位全扫(自动收集该 SN 所有站位图片清单)、日期参数化、
    生成最终合并追溯报告(站位轨迹 + 组件绑定 + 测试数据 + 图片清单)
 3. 排查 Step 8 的 404(Test data 按 SN 查询)
+
+## 新工具:SN 全制程追溯报告(sn_report/,2026-08-09 新增)
+
+目标:输入一个或多个 Fail SN → 一键查询全部信息(站位轨迹 / 机台号 / 载板号 /
+穴位号 / 组件绑定 / PR 图片 / ACF sensorID+flexid)→ 自动汇总成 PPT。
+
+- 入口 `sn_report/sn_report.py`,Windows 双击 `sn_report/run_sn_report.bat`;
+  `--discover` 模式可 dump 页面表格结构确认字段;`--c4` 走战情中心批量接口
+- 数据源沿用 login_test.ps1 已跑通的 MES 登录 + SN search + ReportPortal
+  MC IMG/ACF,解析升级为"表头驱动"(bs4),不再依赖固定列数
+- 机台/载板/穴位:PS1 的 SN search 不含这些字段,需用 C4 接口
+  (`POST http://10.151.128.35:8095/api/MachineParameter/GetInformationDT`,
+  Bearer JWT),列名在 `sn_report/config.json` 的 `c4.columns` 配置,
+  参考解包工具 `reference/boi_commonality_unpacked/`
+- 依赖:新增 openpyxl、python-pptx(requirements.txt);**离线 lib/ 已补齐**
+  (2026-08-09 从 BOI-T exe 提取:openpyxl/pptx/PIL/xlsxwriter/et_xmlfile,
+  见 reference/boi_commonality_unpacked/extract_offline_deps.py;
+  Windows Python 需为 3.11 x64)
+- 待 Windows 验证:① MES 登录/SN search 解析;② ReportPortal SearchType 枚举;
+  ③ C4 接口 payload 字段(snlist/start_time/end_time 键名可能需按实际响应调整);
+  ④ PPT 生成与中文字体效果

@@ -1,10 +1,30 @@
-config.json
-login.log
-login_result.html
-login_page.html
-login_post_result.html
-frame_*.html
-vtq_*.html
-sn_*.html
-sn_trace_report.txt
-downloads/
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 本地配置与运行产物(含账号密码,禁止上传)
+/config.json
+login_test/login.log
+login_test/*.html
+login_test/downloads/
+sn_report/output/
+sn_report/downloads/
+sn_report/build/
+sn_report/dist/
+sn_report/*.spec
+debug_run.txt
+run.log
+
+# 离线依赖与公司内部解包内容(体积大且含内部代码/凭据,默认不上传)
+/lib/
+/reference/
+/python/
+
+# 工具安装包
+/get-pip.py
+*.7z
+*.zip

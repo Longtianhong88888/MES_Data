@@ -1,63 +1,58 @@
-# 快捷登录测试脚本
+# 内部网站资源抓取程序
 
-零安装:只依赖 Windows 自带的 PowerShell 5.1,不需要安装 Python 或任何软件,
-也不会被安全软件当成可执行文件删除。
+这是一个 Python 项目模板，用于从公司内部网站登录并获取资源。
 
-## 用法
+## 依赖
 
-1. 下载本仓库 ZIP(Code → Download ZIP)并解压到 Windows
-2. 把 `config.example.json` 复制为 `config.json`,填入登录地址、账号和密码
-   (不复制也可以,直接运行时会提示输入)
-3. 双击 `login_windows.bat`
+- Python 3.11+
+- requests
+- beautifulsoup4
+- lxml
 
-## 输出说明
+## 安装
 
-- 脚本自动完成 ASP.NET 登录:GET `login.aspx` → 解析 `__VIEWSTATE`/`__EVENTVALIDATION`
-  → POST 账号密码 → 打开 `index.aspx` 应用入口
-- frame 中出现"登入已過期"跳转 = 会话无效;全部正常加载 = 登录成功
-- 登录成功后扫描 top/left/home 三个 frame,列出菜单链接
-- 逐个抓取 SN 追溯查询页(`sn_*.html`),报告查询表单的输入框和按钮结构,
-  为下一步"输入模组 SN 查询全制程绑定信息"做准备
-- 在 `config.json` 里加 `"sn": "模组SN"` 后,脚本会自动在 `report/snsearch.aspx`
-  和 `Tracking/sntotalinfo.aspx` 上提交 SN 查询,结果保存为 `sn_result_*.html`
-- SN search 的结果会自动解析为汇总表 + 站位轨迹 + 耗材记录,保存为
-  `sn_trace_report.txt`
-- Step 8 用模组 SN 查询 Test data 和 ACF 测试页(结果保存为 `td_query_*.html`)
-- Step 9 打开报表门户的 **ACF Test Data**(找 sensorID)和 **MC IMG UpLoadInfo**
-  (查各站位图片下载所需参数),页面保存为 `portal_*.html`
-- Step 9 还会下载门户的共享 JS(`portal_js_*.js`),用于复刻 AJAX 查询逻辑
-- Step 10 用模组 SN 在 ACF Test Data 上发起真实搜索(multipart POST + Bearer token),
-  结果保存为 `portal_search_acf.html`,用于提取 sensorID
-- Step 11 用 sensorID 在 MC IMG UpLoadInfo 上按站位查询图片
-  (`portal_mcimg_search_*.html`),确认各站位图片下载所需参数
+```bash
+python -m pip install -r requirements.txt
+```
 
-## 图片下载(V 形分工)
+## 使用方法
 
-图片文件服务器(`cma1.fs.com` / `10.142.x`)只有公司台式机能直接访问,
-平行桌面 VM 无法直连。流程:
+1. 复制 `config.example.json` 为 `config.json`
+2. 填写 `login_url`、`username`、`password` 和目标资源 URL
+3. 运行：
 
-1. VM 上运行 `login_test.ps1`,生成 `downloads\*images*.txt` 图片链接清单
-2. VM 上双击 `pack_lists.bat`,把清单打包成 `image_lists.zip`(只有几 KB)
-3. 把 zip 传到公司网盘,台式机下载解压
-4. 台式机上双击 `download_images.bat`,按清单批量下载图片到
-   `downloads\images`
-- Test data 页面支持日期/批號/SensorID 三种查询模式;脚本会自动切换到
-  SensorID 模式并用 SN 查询,结果保存为 `testdata_sn_result.html`
-- 过程页面保存:`login_page.html`、`login_post_result.html`、`login_result.html`、
-  `frame_1.html` / `frame_2.html` / `frame_3.html`
-- 完整日志保存在 `login.log`
+```bash
+python main.py
+```
 
-## 常见问题
+## Windows 直接运行
 
-- 输出 `LOGIN FAILED` → 检查 `config.json` 里的账号密码
-- 登录成功但 frame 仍提示会话失效 → 站点可能升级了登录方式(如验证码),把
-  `login_page.html` 发回分析
+如果你希望 Mac 上开发好的代码直接切换到 Windows 运行，可以直接把本项目文件夹复制到 Windows：
 
-## 安全说明
+- 通过 Parallels 共享文件夹
+- 或通过局域网 SMB
+- 或通过移动硬盘/U 盘
 
-- `config.json` 已被 `.gitignore` 忽略,真实密码不会进入仓库
-- 如果 PowerShell 执行策略被禁,请在 cmd 中手动运行:
+项目内已内置 `lib/` 目录，包含全部依赖的离线拷贝（requests、beautifulsoup4、lxml 及其传递依赖），
+Windows 端**无需联网、无需安装任何软件**，进入项目目录后直接运行：
 
 ```cmd
-powershell -NoProfile -ExecutionPolicy Bypass -File login_test.ps1
+run_windows.bat
 ```
+
+`run_windows.bat` 会自动找到项目内 `python\python.exe`（嵌入式 Python 3.11）并运行 `main.py`。
+
+说明：
+
+- 依赖存放在 `lib/` 中，由 `main.py` 启动时自动加入 `sys.path`，不需要 pip 安装
+- 如需在**有外网**的机器上重新生成或升级依赖，可在 Mac 上执行：
+  `python3 -m pip download -r requirements.txt --platform win_amd64 --python-version 3.11 --only-binary=:all: -d wheels`
+  然后把 `wheels/` 拷到 Windows，运行 `install_windows_requirements.bat`（离线安装到嵌入式 Python）
+- 如果你已经有可携带的 Python 运行环境（例如你之前 `auto_report` 项目打包出的可移植环境），请把它放到本项目目录中
+
+## 说明
+
+- `main.py` 提供了登录、页面抓取、HTML 链接解析和文件下载的基础代码结构
+- 由于你公司的内部网站只能从 Windows 平行桌面访问，建议在 Windows 远程桌面环境中运行这个脚本
+- 如果登录流程包含验证码、单点登录或浏览器动态提交，则可能需要使用浏览器自动化（例如 `selenium`）
+- 请勿将真实账号密码提交到版本控制
