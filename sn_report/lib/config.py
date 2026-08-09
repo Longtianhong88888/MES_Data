@@ -9,12 +9,22 @@ from typing import Any, Dict, List
 
 
 def _find_sn_report_dir() -> Path:
-    """定位 sn_report 目录:打包成 exe 后 __file__ 指向临时目录,
-    优先用当前工作目录下的 sn_report(与项目目录共存),其次用模块路径。"""
-    cwd_candidate = Path.cwd() / "sn_report"
-    if cwd_candidate.is_dir():
-        return cwd_candidate
-    return Path(__file__).resolve().parent.parent
+    """定位 sn_report 目录。
+
+    打包成 exe 后:__file__ 指向 PyInstaller 临时解压目录(_MEIxxxx),不可用;
+    必须用 sys.executable(真正的 exe 路径)所在目录,其次才看当前工作目录。
+    """
+    candidates = []
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(sys.executable).resolve().parent / "sn_report")
+    else:
+        candidates.append(Path(__file__).resolve().parent.parent / "sn_report")
+    candidates.append(Path.cwd() / "sn_report")
+    candidates.append(Path(__file__).resolve().parent.parent / "sn_report")
+    for c in candidates:
+        if c.is_dir():
+            return c
+    return candidates[0]
 
 
 SN_REPORT_DIR = _find_sn_report_dir()
@@ -78,6 +88,11 @@ def _load_json(path: Path) -> Dict[str, Any]:
 
 def get_sn_report_config() -> Dict[str, Any]:
     """读取 sn_report/config.json;不存在时写出默认配置并返回。"""
+    if not SN_REPORT_DIR.is_dir():
+        raise RuntimeError(
+            f"找不到 sn_report 配置目录: {SN_REPORT_DIR}\n"
+            "请把 SN_Report.exe 放到 MES_Data 项目根目录(与 sn_report\\ 目录同级)后运行。"
+        )
     path = SN_REPORT_DIR / "config.json"
     cfg = _load_json(path)
     merged = DEFAULT_SN_REPORT_CONFIG.copy()
