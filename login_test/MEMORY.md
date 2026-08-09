@@ -32,8 +32,9 @@
   `https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip`
 - ⚠️⚠️ 2026-08-09 用户反馈:VM 系统会**自动删除下载的 python.exe**,Python 运行时
   **不能常驻 VM**。login_windows.bat 仍可用是因为它只用系统自带 PowerShell。
-  对策(已实现):sn_report 提供 `build_windows.bat`,在能联网装 Python 的
-  Windows 机器上打成**免安装 exe**(`sn_report\dist\SN_Report.exe`),拷到 VM 运行;
+  对策(已实现):sn_report 打成**免安装 exe** 拷到 VM 运行,主用 **GitHub Actions
+  CI**(`.github/workflows/build-windows.yml`,云端自动打包),备选
+  `sn_report/build_windows.bat`(本地 Windows 打包机);
   config.py 已改为优先读运行目录下的 sn_report/config.json,兼容打包后使用。
 - 内嵌版注意:`python311._pth` 里 `#import site` 默认注释,装第三方包前要取消注释;
   pip 用项目内 `get-pip.py` 引导(`python get-pip.py`)
@@ -117,7 +118,8 @@
 目标:输入一个或多个 Fail SN → 一键查询全部信息(站位轨迹 / 机台号 / 载板号 /
 穴位号 / 组件绑定 / PR 图片 / ACF sensorID+flexid)→ 自动汇总成 PPT。
 
-- 入口 `sn_report/run_sn_report.py`,Windows 双击 `sn_report/run_sn_report.bat`;
+- 入口 `sn_report/run_sn_report.py`(⚠️ 已从 sn_report.py 改名,避免与包同名),
+  Windows 双击 `sn_report/run_sn_report.bat`;
   `--discover` 模式可 dump 页面表格结构确认字段;`--c4` 走战情中心批量接口
 - 数据源沿用 login_test.ps1 已跑通的 MES 登录 + SN search + ReportPortal
   MC IMG/ACF,解析升级为"表头驱动"(bs4),不再依赖固定列数
@@ -125,10 +127,33 @@
   (`POST http://10.151.128.35:8095/api/MachineParameter/GetInformationDT`,
   Bearer JWT),列名在 `sn_report/config.json` 的 `c4.columns` 配置,
   参考解包工具 `reference/boi_commonality_unpacked/`
-- 依赖:新增 openpyxl、python-pptx(requirements.txt);**离线 lib/ 已补齐**
+- 依赖:openpyxl、python-pptx(requirements.txt);**离线 lib/ 已补齐**
   (2026-08-09 从 BOI-T exe 提取:openpyxl/pptx/PIL/xlsxwriter/et_xmlfile,
   见 reference/boi_commonality_unpacked/extract_offline_deps.py;
   Windows Python 需为 3.11 x64)
-- 待 Windows 验证:① MES 登录/SN search 解析;② ReportPortal SearchType 枚举;
-  ③ C4 接口 payload 字段(snlist/start_time/end_time 键名可能需按实际响应调整);
-  ④ PPT 生成与中文字体效果
+- **打包**:GitHub Actions(`.github/workflows/build-windows.yml`)在
+  windows-latest + Python 3.11 自动构建 `SN_Report.exe`;
+  仓库 Actions 页 → build-windows-exe → Run workflow → 下载
+  SN_Report-windows-x64 artifact;备选 `sn_report/build_windows.bat`
+- ⚠️ 打包踩过的坑(勿再犯):
+  ① Actions 默认 PowerShell 不认 cmd 的 `^` 续行 → 改单行命令 + `shell: cmd`;
+  ② 从 sn_report/ 目录打包找不到 `sn_report` 包 → 必须从**项目根**打包,
+     加 `--paths .` 和 `--collect-submodules sn_report`;
+  ③ 入口脚本不能叫 `sn_report.py`(与包同名,打包后运行报
+     `'sn_report' is not a package`)→ 已改名 `run_sn_report.py`
+- **运行**:exe 放 MES_Data 根目录,需同时存在根 `config.json`(账号)和
+  `sn_report/config.json`(功能配置);双击闪退时用 `run_sn_report_exe.bat`
+  或 cmd 手动运行查看报错
+- **GitHub 仓库**:`git@github.com:Longtianhong88888/MES_Data.git`(main);
+  .gitignore 排除:根 config.json(含密码)/ lib/ / reference/ / python/ /
+  sn_report/sns.txt / SN_Report.exe / 输出与构建目录
+
+## 待验证(Windows,2026-08-09)
+
+1. 最新重新构建的 SN_Report.exe 在 VM 上能启动并完成 MES 登录(上一版双击闪退,
+   已修复打包模块问题,等待新 artifact)
+2. SN search 表头驱动解析结果与 login_test.ps1 一致
+3. ReportPortal SearchType 枚举
+4. C4 接口 payload 字段(snlist/start_time/end_time 键名可能需按实际响应调整)
+5. PPT 生成与中文字体效果
+6. 公司台式机 download_images.bat 实际下载效果(原有待办)
