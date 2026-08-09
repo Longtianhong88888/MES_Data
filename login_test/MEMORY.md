@@ -140,7 +140,10 @@
   ② 从 sn_report/ 目录打包找不到 `sn_report` 包 → 必须从**项目根**打包,
      加 `--paths .` 和 `--collect-submodules sn_report`;
   ③ 入口脚本不能叫 `sn_report.py`(与包同名,打包后运行报
-     `'sn_report' is not a package`)→ 已改名 `run_sn_report.py`
+     `'sn_report' is not a package`)→ 已改名 `run_sn_report.py`;
+  ④ exe 运行时 `__file__` 指向 PyInstaller 临时目录(`_MEIxxxx`),不能靠它找配置;
+     已改用 `sys.executable`(真正的 exe 路径)定位 → exe 必须与 `sn_report\`
+     目录同级放置,否则报找不到 config.json
 - **运行**:exe 放 MES_Data 根目录,需同时存在根 `config.json`(账号)和
   `sn_report/config.json`(功能配置);双击闪退时用 `run_sn_report_exe.bat`
   或 cmd 手动运行查看报错
