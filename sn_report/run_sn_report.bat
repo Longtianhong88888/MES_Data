@@ -50,7 +50,7 @@ GOTO END
 
 :FOUND_PYTHON
 ECHO 使用 Python: %PYTHON_EXE%
-"%PYTHON_EXE%" sn_report\sn_report.py %*
+"%PYTHON_EXE%" sn_report\run_sn_report.py %*
 SET EXIT_CODE=%ERRORLEVEL%
 ECHO.
 ECHO ===== 退出码: %EXIT_CODE% =====

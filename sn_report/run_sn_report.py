@@ -8,7 +8,7 @@
 
 用法(Windows):
   双击 run_sn_report.bat,或在命令行:
-    python sn_report.py --sns sns.txt --out output/报告.pptx
+    python run_sn_report.py --sns sns.txt --out output/报告.pptx
 
 常用参数:
   --sns PATH       SN 列表(.txt 每行一个 / .csv / .xlsx 第一列)

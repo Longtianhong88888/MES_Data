@@ -117,7 +117,7 @@
 目标:输入一个或多个 Fail SN → 一键查询全部信息(站位轨迹 / 机台号 / 载板号 /
 穴位号 / 组件绑定 / PR 图片 / ACF sensorID+flexid)→ 自动汇总成 PPT。
 
-- 入口 `sn_report/sn_report.py`,Windows 双击 `sn_report/run_sn_report.bat`;
+- 入口 `sn_report/run_sn_report.py`,Windows 双击 `sn_report/run_sn_report.bat`;
   `--discover` 模式可 dump 页面表格结构确认字段;`--c4` 走战情中心批量接口
 - 数据源沿用 login_test.ps1 已跑通的 MES 登录 + SN search + ReportPortal
   MC IMG/ACF,解析升级为"表头驱动"(bs4),不再依赖固定列数

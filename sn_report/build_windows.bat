@@ -69,7 +69,7 @@ REM 必须在项目根目录打包,才能找到 sn_report 包(--paths .)
     --distpath sn_report\dist ^
     --workpath sn_report\build ^
     --specpath sn_report\build ^
-    sn_report\sn_report.py
+    sn_report\run_sn_report.py
 
 ECHO.
 ECHO ===== 打包完成 =====
