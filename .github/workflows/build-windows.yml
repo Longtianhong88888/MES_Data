@@ -29,9 +29,8 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Build SN_Report.exe
-        working-directory: sn_report
         shell: cmd
-        run: python -m PyInstaller --noconfirm --onefile --name SN_Report --distpath dist --workpath build --specpath build --hidden-import PIL --hidden-import openpyxl --hidden-import xlsxwriter sn_report.py
+        run: python -m PyInstaller --noconfirm --onefile --name SN_Report --paths . --collect-submodules sn_report --hidden-import PIL --hidden-import openpyxl --hidden-import xlsxwriter --distpath sn_report/dist --workpath sn_report/build --specpath sn_report/build sn_report/sn_report.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -58,17 +58,18 @@ IF %ERRORLEVEL% NEQ 0 (
 )
 
 ECHO 开始打包...
-cd sn_report
+REM 必须在项目根目录打包,才能找到 sn_report 包(--paths .)
 "%PYTHON_EXE%" -m PyInstaller --noconfirm --onefile ^
     --name SN_Report ^
-    --distpath dist ^
-    --workpath build ^
-    --specpath build ^
+    --paths . ^
+    --collect-submodules sn_report ^
     --hidden-import PIL ^
     --hidden-import openpyxl ^
     --hidden-import xlsxwriter ^
-    sn_report.py
-cd ..
+    --distpath sn_report\dist ^
+    --workpath sn_report\build ^
+    --specpath sn_report\build ^
+    sn_report\sn_report.py
 
 ECHO.
 ECHO ===== 打包完成 =====
