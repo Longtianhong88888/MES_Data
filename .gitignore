@@ -16,6 +16,7 @@ sn_report/downloads/
 sn_report/build/
 sn_report/dist/
 sn_report/*.spec
+sn_report/sns.txt
 debug_run.txt
 run.log
 
