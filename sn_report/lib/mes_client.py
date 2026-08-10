@@ -118,7 +118,14 @@ class MesClient:
         if not self.login_url or not self.username:
             raise MesLoginError("config.json 缺少 login_url / username / password")
 
-        login_page_url = self.login_url + "/login.aspx" if not self.login_url.endswith("login.aspx") else self.login_url
+        # 配置里的 login_url 可能是 "http://host/login"(路径),登录页是域名根下的 login.aspx
+        if self.login_url.endswith("login.aspx"):
+            login_page_url = self.login_url
+        else:
+            m = re.match(r"(https?://[^/]+)", self.login_url)
+            if not m:
+                raise MesLoginError(f"login_url 格式不正确: {self.login_url}")
+            login_page_url = m.group(1) + "/login.aspx"
         r = self.session.get(login_page_url, timeout=30)
         r.raise_for_status()
         html = r.text
