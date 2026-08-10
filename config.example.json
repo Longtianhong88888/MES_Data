@@ -1,14 +1,13 @@
 {
   "login_url": "http://10.151.128.45:8081/login",
-  "username": "your-username",
-  "password": "your-password",
-  "resource_url": "http://10.151.128.45:8081/your/resource/page",
+  "username": "你的账号",
+  "password": "你的密码",
+  "resource_url": "http://10.151.128.45:8081/index.aspx?project=19&custom=LH_Apple_APP003&num=KH297",
   "download_dir": "downloads",
   "login_form": {
-    "username_field": "username",
-    "password_field": "password",
-    "extra_fields": {
-      "rememberMe": "true"
-    }
+    "username_field": "Login1$useridtb",
+    "password_field": "Login1$userpwdtb",
+    "button_field": "Login1$LoginImageButton",
+    "extra_fields": { "rememberMe": "true" }
   }
 }
