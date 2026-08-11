@@ -97,8 +97,13 @@ cd MES_Data\sn_report
 python package_oracle_verify.py      :: 生成 package_oracle_verify\ 部署包
 ```
 
-把 `package_oracle_verify\` 整个目录拷到内网台式机,双击 `run_verify.bat`:
+**重要**:`conns.json`(含 Oracle 连接密码)不入 git,台式机需单独放置:
+把开发机的 `reference\lth\cimtool_conns_decrypted.json` 拷贝为
+`package_oracle_verify\oracle_download\conns.json`(或让管理员提供)。
+
+然后双击 `run_verify.bat`:
 自动解压 Instant Client(Windows x64 19.13)→ 离线安装 wheels(oracledb)→
+弹出 Rayprush 一账通登录验证(10.151.128.45:8081,验证通过才继续)→
 读 `sns.txt` 逐 SN 查询下载 → 输出 `oracle_download\output\oracle_verify\<时间戳>\`
 (verify.json + run.log)与 `downloads\`。
 
