@@ -23,8 +23,17 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import traceback
 
 import pg8000.native
+
+
+if getattr(sys, "frozen", False):
+    # PyInstaller: exe 所在目录为根,输出/日志放 exe 旁边,避免写到 _internal
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+_LOG_LINES: List[str] = []
 
 
 if sys.platform.startswith("win"):
@@ -35,14 +44,34 @@ if sys.platform.startswith("win"):
         pass
 
 
-BASE_DIR = Path(__file__).resolve().parent
-_LOG_LINES: List[str] = []
+def _dump_crash(exc_type, exc, tb) -> None:
+    """全局异常处理:错误写入 exe 旁 crash.log,防止无提示闪退。"""
+    try:
+        msg = "".join(traceback.format_exception(exc_type, exc, tb))
+        (BASE_DIR / "crash.log").write_text(msg, encoding="utf-8")
+        print("\n[FATAL] 程序异常,详情见: " + str(BASE_DIR / "crash.log"))
+        print(msg)
+    except Exception:
+        pass
+    try:
+        input("按回车键退出...")
+    except Exception:
+        pass
+
+
+sys.excepthook = _dump_crash
 
 
 def log(msg: str) -> None:
     line = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
     print(line, flush=True)
     _LOG_LINES.append(line)
+    try:
+        (BASE_DIR / "run_gp.log").write_text(
+            "\n".join(_LOG_LINES) + "\n", encoding="utf-8"
+        )
+    except Exception:
+        pass
 
 
 def esc(value: str) -> str:
@@ -328,10 +357,15 @@ def main() -> int:
     parser.add_argument("--no-download", action="store_true")
     args = parser.parse_args()
     try:
-        return run(args)
+        code = run(args)
     except Exception as exc:  # noqa: BLE001
         log(f"未预期错误: {exc!r}")
-        return 1
+        code = 1
+    try:
+        input("按回车键退出...")
+    except Exception:
+        pass
+    return code
 
 
 if __name__ == "__main__":
