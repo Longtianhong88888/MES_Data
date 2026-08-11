@@ -35,15 +35,15 @@ jobs:
         run: |
           $icDir = (Get-ChildItem ic -Directory | Select-Object -First 1).FullName
           Write-Host "Instant Client dir: $icDir"
-          python -m PyInstaller --noconfirm --onefile --console ^
-            --name SN_Report ^
-            --paths . ^
-            --paths sn_report ^
-            --add-binary "$icDir\*;instantclient" ^
-            --hidden-import lib.login_dialog ^
-            --hidden-import lib.rayprush_auth ^
-            --hidden-import lib.oracle_client ^
-            --collect-submodules PyQt5 ^
+          python -m PyInstaller --noconfirm --onefile --console `
+            --name SN_Report `
+            --paths . `
+            --paths sn_report `
+            --add-binary "$icDir\*;instantclient" `
+            --hidden-import lib.login_dialog `
+            --hidden-import lib.rayprush_auth `
+            --hidden-import lib.oracle_client `
+            --collect-submodules PyQt5 `
             sn_report\run_oracle_download.py
 
       - name: Upload artifact
