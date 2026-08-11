@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -59,10 +60,21 @@ class C4Oracle:
     """C4 Oracle 直连封装。"""
 
     def __init__(self, conns: Optional[dict] = None, data_source_xml: Optional[str] = None,
-                 init_client: Optional[str] = None):
+                 init_client: Optional[str] = None, connect_timeout: int = 15):
         self.conns = conns or {}
+        self.connect_timeout = connect_timeout
         if data_source_xml and not self.conns:
             self.conns = parse_data_source_xml(data_source_xml)
+        if not init_client:
+            # PyInstaller 单文件 exe:Instant Client 已打入包内,运行时解压在 _MEIPASS
+            if getattr(sys, "frozen", False):
+                for candidate in (
+                    Path(getattr(sys, "_MEIPASS", "")) / "instantclient",
+                    Path(sys.executable).resolve().parent / "instantclient",
+                ):
+                    if (candidate / "oci.dll").exists():
+                        init_client = str(candidate)
+                        break
         if init_client:
             try:
                 oracledb.init_oracle_client(lib_dir=init_client)
@@ -86,8 +98,23 @@ class C4Oracle:
         return oracledb.connect(
             user=c["user"], password=c["password"],
             dsn=f"{c['host']}:{c['port']}/{c['service']}",
-            tcp_connect_timeout=15,
+            tcp_connect_timeout=self.connect_timeout,
         )
+
+    def ping(self, conn_name: str, timeout: Optional[int] = None) -> Optional[str]:
+        """快速探测连接是否可用;成功返回 None,失败返回错误信息。"""
+        import socket
+
+        c = self.get(conn_name)
+        s = socket.socket()
+        s.settimeout(timeout or 4)
+        try:
+            s.connect((c["host"], int(c["port"])))
+            return None
+        except Exception as exc:  # noqa: BLE001
+            return f"{c['host']}:{c['port']} {type(exc).__name__}"
+        finally:
+            s.close()
 
     def query(self, conn_name: str, sql: str, params: Optional[list] = None) -> list[tuple]:
         with self.connect(conn_name) as conn:

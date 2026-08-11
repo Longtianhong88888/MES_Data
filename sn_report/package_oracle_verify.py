@@ -40,15 +40,18 @@ def main() -> None:
     conns_src = PROJECT_DIR / "reference" / "lth" / "cimtool_conns_decrypted.json"
     shutil.copy2(conns_src, PKG / "oracle_download" / "conns.json")
 
-    # 3) wheels(全部)
+    # 3) wheels(全部)+ requirements.txt(包名==版本,pip 经 --find-links 匹配)
     wheels_dir = PROJECT_DIR / "wheels"
-    wheel_files = []
     for w in wheels_dir.glob("*.whl"):
         shutil.copy2(w, PKG / "wheels")
-        wheel_files.append(w.name)
-    (PKG / "requirements.txt").write_text(
-        "\n".join(wheel_files) + "\n", encoding="utf-8"
-    )
+    req_src = PROJECT_DIR / "wheels_requirements.txt"
+    if req_src.exists():
+        shutil.copy2(req_src, PKG / "requirements.txt")
+    else:
+        (PKG / "requirements.txt").write_text(
+            "oracledb==4.0.2\nPyQt5==5.15.11\nrequests==2.34.2\n",
+            encoding="utf-8",
+        )
     ic_zip = wheels_dir / "instantclient-basic-windows.x64-19.13.zip"
     if ic_zip.exists():
         shutil.copy2(ic_zip, PKG / "instantclient")
@@ -82,17 +85,17 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    # 6) bat (pure ASCII + CRLF + BOM,避免中文代码页闪退)
+    # 6) bat (pure ASCII + CRLF + BOM; 全相对路径,避免中文路径参数编码问题)
     bat = """@echo off
 chcp 65001 >nul
 setlocal EnableExtensions
 REM ===== Oracle One-Click Verify Package =====
-cd /d %~dp0
+cd /d "%~dp0"
 
 REM [1/5] Extract portable Python 3.11 if needed
 if not exist "python\python.exe" (
   echo [1/5] Extracting portable Python 3.11 ...
-  tar -xzf python311.tar.gz
+  tar -xzf python311.tar.gz -C .
   if %ERRORLEVEL% NEQ 0 (
     echo FAILED: python311.tar.gz missing or tar not available.
     echo Hint: Windows 10 1803+ includes tar. Or unzip it manually.
@@ -104,9 +107,15 @@ if not exist "python\python.exe" (
 REM [2/5] Extract Oracle Instant Client if needed
 if not exist "instantclient\instantclient_19_13\oci.dll" (
   echo [2/5] Extracting Oracle Instant Client ...
-  powershell -Command "Expand-Archive -Path 'instantclient\instantclient-basic-windows.x64-19.13.zip' -DestinationPath 'instantclient' -Force"
+  if not exist "instantclient\instantclient-basic-windows.x64-19.13.zip" (
+    echo FAILED: instantclient zip missing in instantclient folder.
+    pause
+    exit /b 1
+  )
+  tar -xf instantclient\instantclient-basic-windows.x64-19.13.zip -C instantclient
   if %ERRORLEVEL% NEQ 0 (
     echo FAILED: Instant Client extraction error.
+    echo Hint: try unzipping instantclient zip manually with 7-Zip if tar fails.
     pause
     exit /b 1
   )
@@ -128,10 +137,9 @@ if not exist ".venv_ok" (
   echo ok > .venv_ok
 )
 
-REM [5/5] Run verification
+REM [5/5] Run verification (cwd = package root, all relative paths)
 echo [5/5] Starting Oracle verification ...
-cd oracle_download
-..\%PYTHON_EXE% run_oracle_download.py --sns ..\sns.txt --conns conns.json --data-conn APO006CONN --cfg-conn MESSETCONN --instant-client ..\instantclient\instantclient_19_13 --download-dir ..\downloads
+"%PYTHON_EXE%" oracle_download\\run_oracle_download.py --sns ..\sns.txt --conns oracle_download\conns.json --data-conn APO006CONN --cfg-conn MESSETCONN --instant-client instantclient\instantclient_19_13 --download-dir downloads
 echo.
 echo Done. Copy oracle_download/output/oracle_verify and downloads back for analysis.
 pause

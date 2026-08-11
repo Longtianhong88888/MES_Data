@@ -1,0 +1,26 @@
+{
+  "patch_id": "20260811_153232",
+  "created": "2026-08-11 15:32:32",
+  "message": "修复 NameError:登录辅助函数移到 main() 之前",
+  "base_files": {
+    "run_oracle_download.py": "2b823522386f95361d4a740c2920acb71011bcb4a9ffe3b26fb39e1fb588de5e",
+    "lib/oracle_client.py": "bd641851f5b68913c5f10acbc5f7e82976e54bb56d9726c8170851795f6cabd2",
+    "lib/config.py": "a09399d04d7b8d2b4edad96bfe0be2401450080253fec0c4442113d581a65271",
+    "lib/__init__.py": "72bc0d22618493c4f987a316bf1eefdb824759b579f1394cb17ccc645225bb82",
+    "lib/login_dialog.py": "7b956230706b7cd4d2ef7aee1f9049c8fa93d271d2ba6b5dfe5791c1a610dbf9",
+    "lib/rayprush_auth.py": "80f467532451e7171824be0d4a150b64b2c6276f0de0cc0d0cd7c401dc09ccec"
+  },
+  "files": {
+    "run_oracle_download.py": "e82d0bb8393042fec1f1c9f4d05fbc8bf01c7787fb75054997d57c264c2e121b",
+    "lib/oracle_client.py": "17790d0a3b256552c38a782f79eeb0b6c8bab3c29d17a148071e45b41eaa2269",
+    "lib/config.py": "578bb18fe3479d868354c2cdab9abceed76d99046ae2ed9acdee42d8ace8a9ee",
+    "lib/__init__.py": "72bc0d22618493c4f987a316bf1eefdb824759b579f1394cb17ccc645225bb82",
+    "lib/login_dialog.py": "7b956230706b7cd4d2ef7aee1f9049c8fa93d271d2ba6b5dfe5791c1a610dbf9",
+    "lib/rayprush_auth.py": "80f467532451e7171824be0d4a150b64b2c6276f0de0cc0d0cd7c401dc09ccec"
+  },
+  "changed": {
+    "run_oracle_download.py": "e82d0bb8393042fec1f1c9f4d05fbc8bf01c7787fb75054997d57c264c2e121b",
+    "lib/oracle_client.py": "17790d0a3b256552c38a782f79eeb0b6c8bab3c29d17a148071e45b41eaa2269",
+    "lib/config.py": "578bb18fe3479d868354c2cdab9abceed76d99046ae2ed9acdee42d8ace8a9ee"
+  }
+}

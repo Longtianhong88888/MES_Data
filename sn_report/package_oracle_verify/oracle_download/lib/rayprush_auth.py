@@ -9,9 +9,12 @@
 
 from __future__ import annotations
 
+import json
 import re
+import http.cookiejar
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Optional, Tuple
 
 
@@ -23,10 +26,15 @@ class RayprushAuth:
         self.login_url = (login_url or self.LOGIN_URL).rstrip("/") + "/"
         self.timeout = timeout
         self.cookies: Optional[str] = None
+        # 保持 ASP.NET 会话 cookie(GET 登录页时服务器会种 session)
+        self._jar = http.cookiejar.CookieJar()
+        self._opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self._jar)
+        )
 
     def _get(self, url: str) -> Tuple[str, dict]:
         req = urllib.request.Request(url, headers={"User-Agent": self.UA})
-        resp = urllib.request.urlopen(req, timeout=self.timeout)
+        resp = self._opener.open(req, timeout=self.timeout)
         headers = dict(resp.headers)
         return resp.read().decode("utf-8", "replace"), headers
 
@@ -77,7 +85,7 @@ class RayprushAuth:
             },
         )
         try:
-            resp = urllib.request.urlopen(req, timeout=self.timeout)
+            resp = self._opener.open(req, timeout=self.timeout)
         except urllib.error.HTTPError as exc:
             return False, f"登录请求返回 HTTP {exc.code}"
         except Exception as exc:  # noqa: BLE001
@@ -86,6 +94,21 @@ class RayprushAuth:
         final_url = resp.geturl()
         body = resp.read().decode("utf-8", "replace")
         self.cookies = resp.headers.get("Set-Cookie")
+
+        # 调试:保存登录响应与 cookie,便于分析服务器真实提示
+        try:
+            debug_dir = Path.cwd() / "output" / "login_debug"
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            (debug_dir / "login_response.html").write_text(body, encoding="utf-8")
+            (debug_dir / "login_cookies.json").write_text(
+                json.dumps(
+                    [{"name": c.name, "value": c.value} for c in self._jar],
+                    ensure_ascii=False, indent=2,
+                ),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
 
         # 失败:页面出现 alert('...') 提示
         alert = re.search(r"alert\('([^']*)'\)", body)

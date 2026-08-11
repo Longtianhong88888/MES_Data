@@ -60,9 +60,8 @@ class C4Oracle:
     """C4 Oracle 直连封装。"""
 
     def __init__(self, conns: Optional[dict] = None, data_source_xml: Optional[str] = None,
-                 init_client: Optional[str] = None, connect_timeout: int = 15):
+                 init_client: Optional[str] = None):
         self.conns = conns or {}
-        self.connect_timeout = connect_timeout
         if data_source_xml and not self.conns:
             self.conns = parse_data_source_xml(data_source_xml)
         if not init_client:
@@ -98,23 +97,8 @@ class C4Oracle:
         return oracledb.connect(
             user=c["user"], password=c["password"],
             dsn=f"{c['host']}:{c['port']}/{c['service']}",
-            tcp_connect_timeout=self.connect_timeout,
+            tcp_connect_timeout=15,
         )
-
-    def ping(self, conn_name: str, timeout: Optional[int] = None) -> Optional[str]:
-        """快速探测连接是否可用;成功返回 None,失败返回错误信息。"""
-        import socket
-
-        c = self.get(conn_name)
-        s = socket.socket()
-        s.settimeout(timeout or 4)
-        try:
-            s.connect((c["host"], int(c["port"])))
-            return None
-        except Exception as exc:  # noqa: BLE001
-            return f"{c['host']}:{c['port']} {type(exc).__name__}"
-        finally:
-            s.close()
 
     def query(self, conn_name: str, sql: str, params: Optional[list] = None) -> list[tuple]:
         with self.connect(conn_name) as conn:

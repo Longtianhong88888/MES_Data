@@ -26,11 +26,24 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-BASE_DIR = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    # PyInstaller 单文件 exe:以 exe 所在目录为根,配置文件放 exe 旁边
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 from lib.config import load_sn_list  # noqa: E402
 from lib.oracle_client import C4Oracle, load_conns_from_decrypted_json  # noqa: E402
+
+
+if sys.platform.startswith("win"):
+    # Windows 控制台默认 GBK,强制 UTF-8 输出避免中文乱码
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 
 # ---------- 工具 ----------
@@ -260,6 +273,36 @@ def station_file_prefix(station: str, rec: Dict[str, Any]) -> str:
 
 
 # ---------- 主流程 ----------
+
+def _diag_all_hosts(client: C4Oracle, conns_file: str) -> None:
+    """探测 conns.json 中全部连接去重后的主机:端口,输出可达清单。"""
+    import concurrent.futures
+    import socket
+
+    conns = load_conns_from_decrypted_json(conns_file)
+    hosts: Dict[tuple, str] = {}
+    for name, c in conns.items():
+        h, p = c.get("host", ""), c.get("port", "1521")
+        if h:
+            hosts.setdefault((h, int(p)), name)
+
+    def test(item):
+        (h, p), example = item
+        s = socket.socket()
+        s.settimeout(3)
+        try:
+            s.connect((h, p))
+            return f"OK   {h}:{p}  (例:{example})"
+        except Exception as exc:  # noqa: BLE001
+            return f"FAIL {h}:{p}  {type(exc).__name__} (例:{example})"
+        finally:
+            s.close()
+
+    log(f"[诊断] 探测 {len(hosts)} 个 Oracle 主机 ...")
+    with concurrent.futures.ThreadPoolExecutor(20) as ex:
+        for line in ex.map(test, list(hosts.items())):
+            log(line)
+
 def run(args: argparse.Namespace) -> int:
     # 登录验证:Rayprush 一账通通过后才允许继续
     if not args.no_login:
@@ -287,11 +330,26 @@ def run(args: argparse.Namespace) -> int:
     client = C4Oracle(
         conns=load_conns_from_decrypted_json(conns_file),
         init_client=init_client,
+        connect_timeout=8,
     )
     cfg_conn = args.cfg_conn or oracle_cfg.get("cfg_conn", "MESSETCONN")
     data_conn = args.data_conn or oracle_cfg.get("data_conn", "APO006CONN")
 
     log(f"连接: 配置库={cfg_conn} 数据库={data_conn}")
+
+    # 启动前快速探测:数据/配置库不可达时立即明确提示,避免逐站等待超时
+    for name, label in ((cfg_conn, "配置库"), (data_conn, "数据库")):
+        err = client.ping(name)
+        if err:
+            log(f"[诊断] {label} {name} 不可达: {err}")
+            log("请确认台式机到该 Oracle 的网络路由/防火墙已开通。")
+            if args.diag:
+                continue
+            return 3
+    if args.diag:
+        log("连接诊断: 配置库/数据库 TCP 均可达(继续探测登录权限...)")
+        _diag_all_hosts(client, conns_file)
+        return 0
 
     # 站点表映射
     try:
@@ -422,33 +480,7 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Oracle 直连一键下载(BUF/Cali 全部站位照片)")
-    parser.add_argument("--sn", help="单个 Module SN")
-    parser.add_argument("--sns", help="SN 列表文件")
-    parser.add_argument("--conns", help="解密连接 JSON 路径")
-    parser.add_argument("--cfg-conn", default="MESSETCONN", help="配置库连接名")
-    parser.add_argument("--data-conn", default="APO006CONN", help="数据/机种库连接名")
-    parser.add_argument("--instant-client", default="", help="Oracle Instant Client 目录(thick)")
-    parser.add_argument("--download-dir", default="", help="图片下载根目录")
-    parser.add_argument("--no-download", action="store_true", help="只查询不下载")
-    parser.add_argument("--login", action="store_true",
-                        help="弹出 Rayprush 一账通登录验证(通过后继续)")
-    parser.add_argument("--no-login", action="store_true",
-                        help="跳过登录验证(仅限自动化/测试)")
-    args = parser.parse_args()
-    try:
-        return run(args)
-    except Exception as exc:  # noqa: BLE001
-        log(f"未预期错误: {exc!r}")
-        return 1
 
-
-if __name__ == "__main__":
-    sys.exit(main())
-
-
-_verified = False
 
 
 def _root_config() -> Optional[Dict[str, Any]]:
@@ -464,12 +496,15 @@ def _root_config() -> Optional[Dict[str, Any]]:
             break
         cur = cur.parent
     if root is None:
-        return False
+        return None
     try:
         cfg = _json.loads(root.read_text(encoding="utf-8-sig"))
     except Exception:
         return None
     return cfg
+
+
+_verified = False
 
 
 def _try_auto_login() -> bool:
@@ -497,16 +532,86 @@ def _require_login() -> bool:
     """弹出登录窗口,返回是否验证通过。"""
     global _verified
     try:
+        import os
+        import PyQt5
+
+        # 便携 Python 下 PyQt5 插件路径可能不在默认搜索路径,手动指定
+        qt_plugins = Path(PyQt5.__file__).resolve().parent / "Qt5" / "plugins"
+        if qt_plugins.exists():
+            os.environ.setdefault("QT_QPA_PLATFORM_PLUGIN_PATH", str(qt_plugins))
+            from PyQt5.QtCore import QCoreApplication
+
+            QCoreApplication.addLibraryPath(str(qt_plugins))
         from PyQt5.QtWidgets import QApplication
     except ImportError:
-        log("登录验证需要 PyQt5,请先安装(打包 exe 已内置)。")
-        return False
+        log("PyQt5 不可用,改用控制台输入验证。")
+        return _console_login()
+    except Exception as exc:  # noqa: BLE001
+        log(f"登录窗口启动失败({exc}),改用控制台输入验证。")
+        return _console_login()
 
-    from lib.login_dialog import LoginDialog
+    try:
+        from lib.login_dialog import LoginDialog
 
-    app = QApplication.instance() or QApplication([])
-    dlg = LoginDialog()
-    if dlg.exec_() == LoginDialog.Accepted:
-        _verified = True
-        return True
+        app = QApplication.instance() or QApplication([])
+        dlg = LoginDialog()
+        if dlg.exec_() == LoginDialog.Accepted:
+            _verified = True
+            return True
+    except Exception as exc:  # noqa: BLE001
+        log(f"登录窗口异常({exc}),改用控制台输入验证。")
+        return _console_login()
     return False
+
+
+def _console_login() -> bool:
+    """控制台输入 Rayprush 一账通账号密码并验证。"""
+    global _verified
+    from lib.rayprush_auth import RayprushAuth
+
+    cfg = _root_config() or {}
+    auth = RayprushAuth(login_url=cfg.get("login_url"))
+    for attempt in range(3):
+        try:
+            user = input("Rayprush 一账通账号: ").strip()
+        except EOFError:
+            return False
+        import getpass
+
+        pw = getpass.getpass("密码: ")
+        ok, msg = auth.login(user, pw)
+        if ok:
+            _verified = True
+            log("一账通验证通过。")
+            return True
+        log(f"验证失败({attempt + 1}/3): {msg}")
+    return False
+
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Oracle 直连一键下载(BUF/Cali 全部站位照片)")
+    parser.add_argument("--sn", help="单个 Module SN")
+    parser.add_argument("--sns", help="SN 列表文件")
+    parser.add_argument("--conns", help="解密连接 JSON 路径")
+    parser.add_argument("--cfg-conn", default="MESSETCONN", help="配置库连接名")
+    parser.add_argument("--data-conn", default="APO006CONN", help="数据/机种库连接名")
+    parser.add_argument("--instant-client", default="", help="Oracle Instant Client 目录(thick)")
+    parser.add_argument("--download-dir", default="", help="图片下载根目录")
+    parser.add_argument("--no-download", action="store_true", help="只查询不下载")
+    parser.add_argument("--login", action="store_true",
+                        help="弹出 Rayprush 一账通登录验证(通过后继续)")
+    parser.add_argument("--no-login", action="store_true",
+                        help="跳过登录验证(仅限自动化/测试)")
+    parser.add_argument("--diag", action="store_true",
+                        help="连接诊断模式:探测配置库/数据库可达性后继续")
+    args = parser.parse_args()
+    try:
+        return run(args)
+    except Exception as exc:  # noqa: BLE001
+        log(f"未预期错误: {exc!r}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
