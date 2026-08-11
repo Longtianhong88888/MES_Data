@@ -59,6 +59,7 @@ from run_gp_download import (
     GreenplumSerin, extract_images, try_download,
     DOMAIN_IP_MAP, load_sn_list,
 )
+from excel_report import build_excel
 from apple_style import APPLE_QSS, C_BG, C_SUB, card, hint
 
 
@@ -77,7 +78,7 @@ class DownloadWorker(QThread):
     """后台线程执行下载,避免界面卡死。"""
     log_line = pyqtSignal(str)
     progress = pyqtSignal(int, int)
-    done = pyqtSignal(dict)
+    done = pyqtSignal(dict, str)  # (result, excel_path)
 
     def __init__(self, sns: List[str], download_dir: Path,
                  host: str, port: int, database: str, user: str, password: str,
@@ -99,6 +100,7 @@ class DownloadWorker(QThread):
     def run(self):
         result = {"sn_count": len(self.sns), "total": 0, "downloaded": 0,
                   "failed": 0, "sns": {}}
+        excel_path = ""
         try:
             self.gp.connect()
             self.emit(f"Greenplum 连接成功: {self.gp.host}:{self.gp.port}/{self.gp.database}")
@@ -109,7 +111,7 @@ class DownloadWorker(QThread):
                 self.emit(f"专案: 自动识别(共 {len(self.projects)} 个专案)")
         except Exception as exc:  # noqa: BLE001
             self.emit(f"Greenplum 连接失败: {exc}")
-            self.done.emit(result)
+            self.done.emit(result, "")
             return
 
         for i, sn in enumerate(self.sns, start=1):
@@ -189,7 +191,16 @@ class DownloadWorker(QThread):
 
         self.emit(f"完成: {len(self.sns)} SN,照片 {result['total']} 张,"
                   f"下载成功 {result['downloaded']} 张")
-        self.done.emit(result)
+        # 生成 Excel(专案_日期.xlsx)
+        try:
+            project_tag = (self.project or "ALL").upper()
+            date_str = datetime.now().strftime("%Y%m%d")
+            excel_path = str(self.download_dir / f"{project_tag}_{date_str}.xlsx")
+            build_excel(result["sns"], project_tag, excel_path, date_str)
+            self.emit(f"Excel 已生成: {excel_path}")
+        except Exception as exc:  # noqa: BLE001
+            self.emit(f"Excel 生成失败: {exc}")
+        self.done.emit(result, excel_path)
 
 
 class MainWindow(QMainWindow):
@@ -389,14 +400,19 @@ class MainWindow(QMainWindow):
         self.log_view.verticalScrollBar().setValue(
             self.log_view.verticalScrollBar().maximum())
 
-    def _done(self, result: dict):
+    def _done(self, result: dict, excel_path: str):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-        QMessageBox.information(
-            self, "完成",
+        msg = (
             f"SN: {result['sn_count']} 个\n照片: {result['total']} 张\n"
             f"下载成功: {result['downloaded']} 张\n失败: {result['failed']} 张\n"
-            f"保存目录: {self.dir_edit.text()}")
+            f"保存目录: {self.dir_edit.text()}"
+        )
+        if excel_path:
+            msg += f"\n\nExcel: {excel_path}"
+        QMessageBox.information(
+            self, "完成",
+            msg)
 
     def _show_about(self):
         QMessageBox.about(
