@@ -262,7 +262,19 @@ def run(args: argparse.Namespace) -> int:
             p = BASE_DIR / p
         sns = load_sn_list(p)
     else:
-        sns = load_sn_list(BASE_DIR / "sns.txt")
+        sns_txt = BASE_DIR / "sns.txt"
+        if sns_txt.exists():
+            sns = load_sn_list(sns_txt)
+        else:
+            # 双击 exe 无参数:交互输入 SN
+            try:
+                raw = input("输入 Module SN(可多个,逗号分隔): ").strip()
+            except EOFError:
+                raw = ""
+            sns = [s.strip() for s in raw.replace("，", ",").split(",") if s.strip()]
+            if not sns:
+                log("未输入 SN,退出。")
+                return 0
     log(f"SN 数量: {len(sns)}")
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
