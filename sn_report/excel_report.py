@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -44,7 +45,7 @@ def _station_imgs(per_sn: Dict[str, Any], station: str, sn: str) -> List[Dict[st
 
 
 def _place_image(ws, img: Dict[str, Any], row: int, col: int) -> None:
-    """把图片插入单元格 (row, col),按行高 120 缩放,顶部对齐。"""
+    """把图片转为 JPEG 后插入单元格 (row, col),按行高 120 缩放。"""
     path = img.get("dest") or ""
     if not path or not Path(path).exists():
         return
@@ -55,12 +56,22 @@ def _place_image(ws, img: Dict[str, Any], row: int, col: int) -> None:
         w, h = 200, 120
     if h <= 0:
         return
+    # 统一转 JPEG,避免 Excel 里出现 PNG
+    try:
+        tmp = Path(tempfile.gettempdir()) / (
+            f"xl_{abs(hash(str(path)))}_{Path(path).stem[:10]}.jpg"
+        )
+        with PilImage.open(path) as p:
+            p.convert("RGB").save(tmp, "JPEG", quality=92)
+        path = tmp
+    except Exception:
+        pass
     target_h = ROW_HEIGHT - 2 * IMG_MARGIN
     scale = target_h / h
     iw = int(w * scale)
     if iw <= 0:
         return
-    xl = XlImage(path)
+    xl = XlImage(str(path))
     xl.width = iw
     xl.height = int(h * scale)
     # 单元格左上角锚点

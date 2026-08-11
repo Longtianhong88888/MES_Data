@@ -8,6 +8,7 @@ REM  Output: dist\SN_Report_Windows\  (exe + _internal folder)
 REM  Copy that whole folder to the target PC and double-click exe.
 REM ============================================================
 cd /d "%~dp0.."
+set "REPO_ROOT=%CD%"
 
 REM ---- find python ----
 set PYTHON_EXE=
@@ -28,7 +29,8 @@ echo [1/4] Python: %PYTHON_EXE%
 REM ---- install pyinstaller + runtime deps ----
 echo [2/4] Installing pyinstaller and dependencies (needs internet) ...
 %PYTHON_EXE% -m pip install --upgrade pip >nul 2>&1
-%PYTHON_EXE% -m pip install pyinstaller pg8000 scramp PyQt5 requests >nul 2>&1
+%PYTHON_EXE% -m pip install pyinstaller >nul 2>&1
+%PYTHON_EXE% -m pip install -r sn_report\requirements.txt >nul 2>&1
 if errorlevel 1 (
   echo [FAIL] pip install failed. Check internet.
   pause
@@ -42,13 +44,14 @@ if exist sn_report\dist rmdir /s /q sn_report\dist
 %PYTHON_EXE% -m PyInstaller --noconfirm --clean --onedir --windowed ^
   --name SN_Report ^
   --paths sn_report ^
-  --icon sn_report\favicon.ico ^
-  --add-data "sn_report\favicon.ico;." ^
+  --icon "%REPO_ROOT%\sn_report\favicon.ico" ^
+  --add-data "%REPO_ROOT%\sn_report\favicon.ico;." ^
   --hidden-import pg8000.native ^
   --hidden-import scramp ^
   --hidden-import gp_gui ^
-  --hidden-import lib.config ^
-  --hidden-import lib.rayprush_auth ^
+  --hidden-import apple_style ^
+  --hidden-import excel_report ^
+  --hidden-import openpyxl ^
   --collect-submodules PyQt5 ^
   --distpath sn_report\dist ^
   --workpath sn_report\build ^
@@ -68,4 +71,5 @@ echo.
 echo ===== DONE =====
 echo Output folder: sn_report\dist\SN_Report_Windows\
 echo Copy this folder to the target Windows PC, then double-click SN_Report.exe
-pause
+echo Press any key to exit ...
+pause >nul

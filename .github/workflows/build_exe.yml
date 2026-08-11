@@ -23,7 +23,8 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pyinstaller pg8000 scramp requests PyQt5
+          python -m pip install pyinstaller
+          python -m pip install -r sn_report\requirements.txt
 
       - name: Build onedir exe
         shell: pwsh
@@ -38,10 +39,19 @@ jobs:
             --hidden-import scramp `
             --hidden-import gp_gui `
             --hidden-import apple_style `
+            --hidden-import openpyxl `
+            --hidden-import excel_report `
+            --collect-submodules PyQt5 `
             --distpath dist `
             --workpath build `
             --specpath build `
             sn_report\gp_gui.py
+
+      - name: Package release zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\SN_Report\* -DestinationPath dist\SN_Report_Windows.zip -Force
+          Get-ChildItem dist
 
       - name: Show output
         shell: pwsh
@@ -53,10 +63,10 @@ jobs:
         with:
           name: SN_Report_Windows
           path: dist/SN_Report
+          compression-level: 9
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/SN_Report/SN_Report.exe
+          files: dist/SN_Report_Windows.zip
