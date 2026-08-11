@@ -115,36 +115,59 @@ class GreenplumSerin:
         return self.connect().run(sql)
 
     def columns(self, table: str) -> List[str]:
+        if "." in table:
+            schema, tname = table.split(".", 1)
+        else:
+            schema, tname = "datacenterdev", table
         rows = self.q(
             "select column_name from information_schema.columns "
-            f"where table_schema='datacenterdev' and table_name='{esc(table)}' "
+            f"where table_schema='{esc(schema)}' and table_name='{esc(tname)}' "
             "order by ordinal_position"
         )
         return [r[0] for r in rows]
 
-    def eol_by_sn(self, sn: str) -> Optional[Dict[str, Any]]:
+    def list_projects(self) -> List[str]:
+        """列出 datacenterdev 下所有专案(有 EOL 图片表的)。"""
         rows = self.q(
-            f"select * from datacenterdev.t_boi_eolpicturedata where sn='{esc(sn)}'"
+            "select tablename from pg_tables "
+            "where schemaname='datacenterdev' and tablename like '%eolpicturedata' "
+            "order by tablename"
+        )
+        projs = sorted({
+            r[0].replace("t_", "").replace("_eolpicturedata", "")
+            for r in rows
+        })
+        return projs
+
+    def eol_by_sn(self, sn: str, project: str = "boi") -> Optional[Dict[str, Any]]:
+        table = f"datacenterdev.t_{esc(project)}_eolpicturedata"
+        rows = self.q(
+            f"select * from {table} where sn='{esc(sn)}'"
         )
         if not rows:
             return None
-        return dict(zip(self.columns("t_boi_eolpicturedata"), rows[0]))
+        return dict(zip(self.columns(table), rows[0]))
 
-    def fol_by_sensor(self, sensorid: str) -> Optional[Dict[str, Any]]:
+    def fol_by_sensor(self, sensorid: str, project: str = "boi") -> Optional[Dict[str, Any]]:
+        table = f"datacenterdev.t_{esc(project)}_folpicturedata"
         rows = self.q(
-            f"select * from datacenterdev.t_boi_folpicturedata "
+            f"select * from {table} "
             f"where sensorid='{esc(sensorid)}'"
         )
         if not rows:
             return None
-        return dict(zip(self.columns("t_boi_folpicturedata"), rows[0]))
+        return dict(zip(self.columns(table), rows[0]))
 
-    def sensor_by_sn(self, sn: str) -> Optional[str]:
-        """从 EOL 行取 sensorid(也尝试从 SN 前缀表反查)。"""
-        rec = self.eol_by_sn(sn)
-        if rec and rec.get("sensorid"):
-            return str(rec["sensorid"])
-        return None
+    def resolve_project(self, sn: str) -> str:
+        """SN 所属专案:在哪个专案 EOL 表能查到,默认 boi。"""
+        for proj in self.list_projects():
+            try:
+                rec = self.eol_by_sn(sn, proj)
+                if rec:
+                    return proj
+            except Exception:
+                continue
+        return "boi"
 
 
 STATION_KEYWORDS = [
@@ -277,6 +300,14 @@ def run(args: argparse.Namespace) -> int:
                 return 0
     log(f"SN 数量: {len(sns)}")
 
+    project = (args.project or "").strip().lower()
+    if project in ("", "auto", "全部", "all"):
+        project = ""
+    if project:
+        log(f"专案: {project}")
+    else:
+        log("专案: 自动识别(在全部专案中查找)")
+
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_root = BASE_DIR / "output" / "gp_verify" / ts
     out_root.mkdir(parents=True, exist_ok=True)
@@ -287,11 +318,25 @@ def run(args: argparse.Namespace) -> int:
         log(f"[{i}/{len(sns)}] === SN: {sn} ===")
         per_sn: Dict[str, Any] = {"sn": sn, "eol": {}, "fol": {}, "total": 0,
                                    "downloaded": 0, "failed": 0}
-        try:
-            eol = gp.eol_by_sn(sn)
-        except Exception as exc:  # noqa: BLE001
-            log(f"  EOL 查询失败: {str(exc)[:100]}")
-            eol = None
+        eol = None
+        used_project = project
+        if project:
+            try:
+                eol = gp.eol_by_sn(sn, project)
+            except Exception as exc:  # noqa: BLE001
+                log(f"  EOL 查询失败: {str(exc)[:100]}")
+        else:
+            # 自动:在全部专案中找有数据的
+            for proj in gp.list_projects():
+                try:
+                    eol = gp.eol_by_sn(sn, proj)
+                    if eol:
+                        used_project = proj
+                        break
+                except Exception:
+                    continue
+            if eol:
+                log(f"  专案识别: {used_project}")
         if eol:
             imgs = extract_images(eol)
             log(f"  EOL 照片: {len(imgs)} 张")
@@ -315,7 +360,7 @@ def run(args: argparse.Namespace) -> int:
             sensor = str(eol.get("sensorid") or "")
             if sensor:
                 try:
-                    fol = gp.fol_by_sensor(sensor)
+                    fol = gp.fol_by_sensor(sensor, used_project)
                 except Exception as exc:  # noqa: BLE001
                     fol = None
                     log(f"  FOL 查询失败: {str(exc)[:100]}")
@@ -365,6 +410,8 @@ def main() -> int:
     parser.add_argument("--database", default="wwwgpdw")
     parser.add_argument("--user", default="gpdwdev")
     parser.add_argument("--password", default="Altus2014")
+    parser.add_argument("--project", default="",
+                        help="专案(如 boi/akc/chs);留空自动识别全部专案")
     parser.add_argument("--download-dir", default="")
     parser.add_argument("--no-download", action="store_true")
     args = parser.parse_args()

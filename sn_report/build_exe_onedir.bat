@@ -39,18 +39,19 @@ REM ---- build onedir ----
 echo [3/4] Building exe ...
 if exist sn_report\build rmdir /s /q sn_report\build
 if exist sn_report\dist rmdir /s /q sn_report\dist
-%PYTHON_EXE% -m PyInstaller --noconfirm --clean --onedir ^
+%PYTHON_EXE% -m PyInstaller --noconfirm --clean --onedir --windowed ^
   --name SN_Report ^
   --paths sn_report ^
   --hidden-import pg8000.native ^
   --hidden-import scramp ^
+  --hidden-import gp_gui ^
   --hidden-import lib.config ^
   --hidden-import lib.rayprush_auth ^
   --collect-submodules PyQt5 ^
   --distpath sn_report\dist ^
   --workpath sn_report\build ^
   --specpath sn_report\build ^
-  sn_report\run_gp_download.py
+  sn_report\gp_gui.py
 if errorlevel 1 (
   echo [FAIL] PyInstaller build failed.
   pause
