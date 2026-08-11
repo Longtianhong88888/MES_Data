@@ -136,7 +136,7 @@
     "url": "http://10.151.128.35:8095/api/MachineParameter/GetInformationDT",
     "plant_id": "8S01",
     "device": "BOI-T",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VyTmFtZSI6Ium-jeWkqee0hSIsIlVzZXJJZCI6IkcxNjU1ODk1IiwiRW1haWwiOiIiLCJCdUNvZGUiOiIiLCJDb21wYW55SWQiOiIiLCJQb3NpdGlvbiI6IiIsIlBvc2l0aW9uYWwiOiIiLCJVc2VyVGVsIjoiIiwiVGVsZXBob25lIjoiIiwiRGVwYXJ0Q29kZSI6IiIsIkxhbmd1YWdlIjoiIiwiQ29zdENvZGUiOiIiLCJQZXJtaXNzaW9ucyI6IltdIiwiaWF0IjoiMTc4NjQxNjMyNCIsIm5iZiI6IjE3ODY0MTYzMjQiLCJleHAiOiIxNzg2NDI3MTI0IiwiaXNzIjoibWlzLmNvcmUub3duZXIiLCJhdWQiOiJtaXMuY29yZSJ9.LICvD2H7DjQe9EQKQ5ABdBcLxgUNPwlgmsMNqQpjDAY",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VyTmFtZSI6Ium-jeWkqee0hSIsIlVzZXJJZCI6IkcxNjU1ODk1IiwiRW1haWwiOiIiLCJCdUNvZGUiOiIiLCJDb21wYW55SWQiOiIiLCJQb3NpdGlvbiI6IiIsIlBvc2l0aW9uYWwiOiIiLCJVc2VyVGVsIjoiIiwiVGVsZXBob25lIjoiIiwiRGVwYXJ0Q29kZSI6IiIsIkxhbmd1YWdlIjoiIiwiQ29zdENvZGUiOiIiLCJQZXJtaXNzaW9ucyI6IltdIiwiaWF0IjoiMTc4NjQ0OTI2MyIsIm5iZiI6IjE3ODY0NDkyNjMiLCJleHAiOiIxNzg2NDYwMDYzIiwiaXNzIjoibWlzLmNvcmUub3duZXIiLCJhdWQiOiJtaXMuY29yZSJ9.EZvRQjjzmbn498eurBG6BKmUoEKqbz6OeEC9VjHx8_w",
     "type": "8S01",
     "extra_params": {},
     "columns": [

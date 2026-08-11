@@ -62,6 +62,7 @@ from run_gp_download import (
 )
 from excel_report import build_excel
 from apple_style import APPLE_QSS, C_BG, C_SUB, card, hint
+from c4_auth import C4Auth
 
 
 def window_target_size(ratio: float = 0.8) -> tuple:
@@ -204,6 +205,46 @@ class DownloadWorker(QThread):
         self.done.emit(result, excel_path)
 
 
+class AuthWorker(QThread):
+    """后台执行 C4 登录+IIOT 验证。"""
+    log_line = pyqtSignal(str)
+    done = pyqtSignal(bool, str, str)  # (success, token, message)
+
+    def __init__(self, userid: str, password: str):
+        super().__init__()
+        self.userid = userid
+        self.password = password
+
+    def run(self):
+        auth = C4Auth()
+        ok, msg = auth.login(self.userid, self.password)
+        if not ok:
+            self.log_line.emit(f"登录失败: {msg}")
+            self.done.emit(False, "", msg)
+            return
+        self.log_line.emit("一账通登录成功,已获取 JWT")
+        # IIOT 验证
+        ok2, msg2 = auth.verify()
+        if ok2:
+            self.log_line.emit("IIOT 鉴权通过,获得访问权限")
+        else:
+            self.log_line.emit(f"IIOT 鉴权提示: {msg2}(继续)")
+        # 保存 token
+        try:
+            import json as _json
+            from pathlib import Path as _P
+            base = _P(sys.executable).resolve().parent if getattr(sys, "frozen", False) \
+                else _P(__file__).resolve().parent
+            cfg_path = base / "config.json"
+            cfg = _json.loads(cfg_path.read_text(encoding="utf-8-sig")) if cfg_path.exists() else {}
+            cfg.setdefault("c4", {})["token"] = auth.token
+            cfg_path.write_text(_json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+            self.log_line.emit(f"token 已保存: {cfg_path}")
+        except Exception as exc:  # noqa: BLE001
+            self.log_line.emit(f"token 保存失败: {exc}")
+        self.done.emit(True, auth.token, "登录成功")
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -217,6 +258,7 @@ class MainWindow(QMainWindow):
         self.resize(w, h)
         self.setMinimumSize(max(720, int(w * 0.82)), max(560, int(h * 0.85)))
         self.worker: Optional[DownloadWorker] = None
+        self.auth_worker: Optional[AuthWorker] = None
         self.setStyleSheet(APPLE_QSS)
         self._create_menu()
         self._build_ui()
@@ -225,11 +267,37 @@ class MainWindow(QMainWindow):
         file_menu = self.menuBar().addMenu("文件")
         file_menu.addAction("选择 SN 文件", self._pick_file)
         file_menu.addAction("选择保存目录", self._pick_dir)
+        file_menu.addAction("登录获取权限", self._do_auth_login)
         file_menu.addSeparator()
         file_menu.addAction("退出", self.close)
 
         help_menu = self.menuBar().addMenu("帮助")
         help_menu.addAction("关于", self._show_about)
+
+    def _do_auth_login(self):
+        userid = self.auth_user_edit.text().strip()
+        password = self.auth_pwd_edit.text()
+        if not userid or not password:
+            QMessageBox.warning(self, "提示", "请输入一账通账号和密码。")
+            return
+        self.auth_btn.setEnabled(False)
+        self.auth_status.setText("正在登录获取权限 ...")
+        self._append_log("[权限] 开始登录 ...")
+        self.auth_worker = AuthWorker(userid, password)
+        self.auth_worker.log_line.connect(self._append_log)
+        self.auth_worker.done.connect(self._auth_done)
+        self.auth_worker.start()
+
+    def _auth_done(self, ok: bool, token: str, message: str):
+        self.auth_btn.setEnabled(True)
+        if ok:
+            self.auth_status.setStyleSheet("color: #34C759;")
+            self.auth_status.setText(f"已登录(权限获取成功) token: {token[:25]}...")
+            self._append_log(f"[权限] {message}")
+        else:
+            self.auth_status.setStyleSheet("color: #FF3B30;")
+            self.auth_status.setText(f"登录失败: {message}")
+            self._append_log(f"[权限] 登录失败: {message}")
 
     def _build_ui(self):
         central = QWidget(self)
@@ -237,6 +305,29 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central)
         root.setContentsMargins(20, 16, 20, 16)
         root.setSpacing(10)
+
+        # ─── 登录获取权限卡片 ───
+        auth_grid = QGridLayout()
+        auth_grid.setVerticalSpacing(6)
+        auth_grid.setHorizontalSpacing(8)
+        auth_grid.addWidget(QLabel("一账通账号"), 0, 0)
+        self.auth_user_edit = QLineEdit()
+        self.auth_user_edit.setPlaceholderText("工号")
+        auth_grid.addWidget(self.auth_user_edit, 0, 1)
+        auth_grid.addWidget(QLabel("密码"), 0, 2)
+        self.auth_pwd_edit = QLineEdit()
+        self.auth_pwd_edit.setEchoMode(QLineEdit.Password)
+        self.auth_pwd_edit.setPlaceholderText("一账通密码")
+        auth_grid.addWidget(self.auth_pwd_edit, 0, 3)
+        self.auth_btn = QPushButton("登录获取权限")
+        self.auth_btn.setProperty("primary", True)
+        self.auth_btn.clicked.connect(self._do_auth_login)
+        auth_grid.addWidget(self.auth_btn, 0, 4)
+        self.auth_status = hint("未登录")
+        auth_grid.addWidget(self.auth_status, 1, 0, 1, 5)
+        auth_grid.setColumnStretch(1, 1)
+        auth_grid.setColumnStretch(3, 1)
+        root.addWidget(card("权限登录(IIOT/C4)", auth_grid))
 
         # ─── 连接信息卡片 ───
         conn_grid = QGridLayout()
