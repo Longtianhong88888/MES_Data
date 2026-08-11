@@ -42,6 +42,8 @@ if exist sn_report\dist rmdir /s /q sn_report\dist
 %PYTHON_EXE% -m PyInstaller --noconfirm --clean --onedir --windowed ^
   --name SN_Report ^
   --paths sn_report ^
+  --icon sn_report\favicon.ico ^
+  --add-data "sn_report\favicon.ico;." ^
   --hidden-import pg8000.native ^
   --hidden-import scramp ^
   --hidden-import gp_gui ^

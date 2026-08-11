@@ -48,6 +48,7 @@ DB_CFG = _load_db_config()
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QMessageBox,
@@ -207,6 +208,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SN_Report - Greenplum Serin 照片一键下载")
+        icon_path = BASE_DIR / "favicon.ico"
+        if not icon_path.exists() and getattr(sys, "_MEIPASS", None):
+            icon_path = Path(sys._MEIPASS) / "favicon.ico"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
         w, h = window_target_size()
         self.resize(w, h)
         self.setMinimumSize(max(720, int(w * 0.82)), max(560, int(h * 0.85)))
