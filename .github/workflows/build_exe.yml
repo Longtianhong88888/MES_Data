@@ -28,15 +28,17 @@ jobs:
       - name: Build onedir exe
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir `
+          python -m PyInstaller --noconfirm --clean --onedir --windowed `
             --name SN_Report `
             --paths sn_report `
             --hidden-import pg8000.native `
             --hidden-import scramp `
+            --hidden-import gp_gui `
+            --hidden-import apple_style `
             --distpath dist `
             --workpath build `
             --specpath build `
-            sn_report\run_gp_download.py
+            sn_report\gp_gui.py
 
       - name: Show output
         shell: pwsh

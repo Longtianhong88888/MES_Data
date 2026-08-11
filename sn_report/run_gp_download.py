@@ -283,6 +283,10 @@ def run(args: argparse.Namespace) -> int:
         p = Path(args.sns)
         if not p.is_absolute():
             p = BASE_DIR / p
+        if not p.exists():
+            log(f"SN 文件不存在: {p}")
+            log("请用 --sns 指定正确路径,或双击 exe 后直接输入 SN。")
+            return 2
         sns = load_sn_list(p)
     else:
         sns_txt = BASE_DIR / "sns.txt"
@@ -419,6 +423,11 @@ def main() -> int:
         code = run(args)
     except Exception as exc:  # noqa: BLE001
         log(f"未预期错误: {exc!r}")
+        try:
+            (BASE_DIR / "crash.log").write_text(
+                traceback.format_exc(), encoding="utf-8")
+        except Exception:
+            pass
         code = 1
     try:
         input("按回车键退出...")
