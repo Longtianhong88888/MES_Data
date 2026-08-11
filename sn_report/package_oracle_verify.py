@@ -82,55 +82,63 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    # 6) bat
-    bat = r"""@echo off
+    # 6) bat (pure ASCII + CRLF + BOM,避免中文代码页闪退)
+    bat = """@echo off
 chcp 65001 >nul
-REM Oracle 一键下载验证包 - 内网台式机运行
+setlocal EnableExtensions
+REM ===== Oracle One-Click Verify Package =====
 cd /d %~dp0
 
-REM 1. 解压便携 Python 3.11(若未解压;Windows 10 1803+ 自带 tar)
+REM [1/5] Extract portable Python 3.11 if needed
 if not exist "python\python.exe" (
-  echo [1/5] 解压便携 Python 3.11 ...
+  echo [1/5] Extracting portable Python 3.11 ...
   tar -xzf python311.tar.gz
   if %ERRORLEVEL% NEQ 0 (
-    echo 便携 Python 解压失败,请确认 python311.tar.gz 存在且系统支持 tar。
+    echo FAILED: python311.tar.gz missing or tar not available.
+    echo Hint: Windows 10 1803+ includes tar. Or unzip it manually.
     pause
     exit /b 1
   )
 )
 
-REM 2. 解压 Instant Client(若未解压)
+REM [2/5] Extract Oracle Instant Client if needed
 if not exist "instantclient\instantclient_19_13\oci.dll" (
-  echo [2/5] 解压 Oracle Instant Client ...
+  echo [2/5] Extracting Oracle Instant Client ...
   powershell -Command "Expand-Archive -Path 'instantclient\instantclient-basic-windows.x64-19.13.zip' -DestinationPath 'instantclient' -Force"
+  if %ERRORLEVEL% NEQ 0 (
+    echo FAILED: Instant Client extraction error.
+    pause
+    exit /b 1
+  )
 )
 
-REM 3. 使用项目内置便携 Python(免安装,不依赖系统 Python)
+REM [3/5] Use bundled portable Python
 SET PYTHON_EXE=python\python.exe
-echo [3/5] 使用 Python: %PYTHON_EXE%
+echo [3/5] Using Python: %PYTHON_EXE%
 
-REM 4. 离线安装 wheels(仅首次)
+REM [4/5] Offline install wheels (first run only)
 if not exist ".venv_ok" (
-  echo [4/5] 离线安装依赖(wheels)...
+  echo [4/5] Installing offline wheels ...
   "%PYTHON_EXE%" -m pip install --no-index --find-links=wheels -r requirements.txt
   if %ERRORLEVEL% NEQ 0 (
-    echo 依赖安装失败,请确认 wheels 目录完整或查看上方错误。
+    echo FAILED: dependency install. Check wheels/ folder or error above.
     pause
     exit /b 1
   )
   echo ok > .venv_ok
 )
 
-REM 5. 运行验证
-echo [5/5] 开始 Oracle 一键下载验证 ...
+REM [5/5] Run verification
+echo [5/5] Starting Oracle verification ...
 cd oracle_download
 ..\%PYTHON_EXE% run_oracle_download.py --sns ..\sns.txt --conns conns.json --data-conn APO006CONN --cfg-conn MESSETCONN --instant-client ..\instantclient\instantclient_19_13 --download-dir ..\downloads
 echo.
-echo 验证完成。请把 verify_output 和 downloads 目录拷回分析。
+echo Done. Copy oracle_download/output/oracle_verify and downloads back for analysis.
 pause
 """
-    (PKG / "run_verify.bat").write_text(bat, encoding="utf-8")
-
+    (PKG / "run_verify.bat").write_bytes(
+        b"\xef\xbb\xbf" + bat.replace("\n", "\r\n").encode("utf-8")
+    )
     # 7) 验证记录输出目录说明
     (PKG / "README.txt").write_text(
         "Oracle 一键下载验证包\n"

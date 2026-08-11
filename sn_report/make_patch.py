@@ -137,28 +137,24 @@ if fail:
     print("失败文件:", fail)
 '''
     (patch_dir / "apply_patch.py").write_text(apply_py, encoding="utf-8")
-    (patch_dir / "apply_patch.bat").write_text(
-        "@echo off\n"
-        "chcp 65001 >nul\n"
-        "cd /d %~dp0\n"
-        "echo 应用补丁 %~dp0 ...\n"
-        "for %%F in (..\\python\\python.exe ..\\python3\\python.exe python python3) do (\n"
-        "  where %%F >nul 2>&1 && set PY=%%F && goto FOUND\n"
-        ")\n"
-        ":FOUND\n"
-        "if not defined PY (\n"
-        "  echo 未找到 Python,请用 python apply_patch.py 手动应用。\n"
-        "  pause\n"
-        "  exit /b 1\n"
-        ")\n"
-        "%PY% apply_patch.py\n"
-        "pause\n",
-        encoding="utf-8",
+    (patch_dir / "apply_patch.bat").write_bytes(
+        b"\xef\xbb\xbf" + (
+            "@echo off\r\n"
+            "chcp 65001 >nul\r\n"
+            "cd /d %~dp0\r\n"
+            "echo Applying patch %~dp0 ...\r\n"
+            "set PY=\r\n"
+            "if exist ..\\python\\python.exe set PY=..\\python\\python.exe\r\n"
+            "if not defined PY for %%F in (python python3) do (where %%F >nul 2>&1 && set PY=%%F)\r\n"
+            "if not defined PY (\r\n"
+            "  echo Python not found. Run: python apply_patch.py\r\n"
+            "  pause\r\n"
+            "  exit /b 1\r\n"
+            ")\r\n"
+            "%PY% apply_patch.py\r\n"
+            "pause\r\n"
+        ).encode("utf-8")
     )
-    (patch_dir / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
     # 更新基线
     BASELINE.write_text(
         json.dumps({"files": manifest["files"], "last_patch": manifest["patch_id"]},
