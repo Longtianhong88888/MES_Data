@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -63,6 +64,16 @@ class C4Oracle:
         self.conns = conns or {}
         if data_source_xml and not self.conns:
             self.conns = parse_data_source_xml(data_source_xml)
+        if not init_client:
+            # PyInstaller 单文件 exe:Instant Client 已打入包内,运行时解压在 _MEIPASS
+            if getattr(sys, "frozen", False):
+                for candidate in (
+                    Path(getattr(sys, "_MEIPASS", "")) / "instantclient",
+                    Path(sys.executable).resolve().parent / "instantclient",
+                ):
+                    if (candidate / "oci.dll").exists():
+                        init_client = str(candidate)
+                        break
         if init_client:
             try:
                 oracledb.init_oracle_client(lib_dir=init_client)

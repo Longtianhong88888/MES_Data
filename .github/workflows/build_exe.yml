@@ -1,0 +1,59 @@
+name: build-exe
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+          python -m pip install --no-index --find-links=wheels -r wheels_requirements.txt
+
+      - name: Extract Instant Client
+        shell: pwsh
+        run: |
+          Expand-Archive -Path sn_report/package_oracle_verify/instantclient/instantclient-basic-windows.x64-19.13.zip -DestinationPath ic -Force
+          Get-ChildItem ic -Directory | Select-Object -ExpandProperty FullName
+
+      - name: Build exe
+        shell: pwsh
+        run: |
+          $icDir = (Get-ChildItem ic -Directory | Select-Object -First 1).FullName
+          Write-Host "Instant Client dir: $icDir"
+          python -m PyInstaller --noconfirm --onefile --console ^
+            --name SN_Report ^
+            --paths . ^
+            --paths sn_report ^
+            --add-binary "$icDir\*;instantclient" ^
+            --hidden-import lib.login_dialog ^
+            --hidden-import lib.rayprush_auth ^
+            --hidden-import lib.oracle_client ^
+            --collect-submodules PyQt5 ^
+            sn_report\run_oracle_download.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SN_Report-exe
+          path: dist/SN_Report.exe
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/SN_Report.exe

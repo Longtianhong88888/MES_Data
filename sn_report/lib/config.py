@@ -16,7 +16,8 @@ def _find_sn_report_dir() -> Path:
     """
     candidates = []
     if getattr(sys, "frozen", False):
-        candidates.append(Path(sys.executable).resolve().parent / "sn_report")
+        # 单文件 exe:配置/SN 列表/输出都在 exe 同目录
+        candidates.append(Path(sys.executable).resolve().parent)
     else:
         candidates.append(Path(__file__).resolve().parent.parent / "sn_report")
     candidates.append(Path.cwd() / "sn_report")
