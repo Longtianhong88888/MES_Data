@@ -48,7 +48,9 @@ DB_CFG = _load_db_config()
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QMessageBox,
@@ -300,6 +302,20 @@ class MainWindow(QMainWindow):
         self.auth_worker.done.connect(self._auth_done)
         self.auth_worker.start()
 
+    def _open_token_page(self):
+        """用系统默认浏览器打开 tokenbylogin 页面(邮件验证码/APP扫码登录)。"""
+        url = QUrl("http://10.151.130.134:8086/#/tokenbylogin")
+        ok = QDesktopServices.openUrl(url)
+        if not ok:
+            QMessageBox.warning(
+                self, "提示",
+                "无法自动打开浏览器,请手动访问:\n"
+                "http://10.151.130.134:8086/#/tokenbylogin",
+            )
+        else:
+            self._append_log("[权限] 已在浏览器打开 tokenbylogin 页面,"
+                             "请登录(邮件验证码/APP扫码)后复制 Token 粘贴回来。")
+
     def _do_verify_token(self):
         """验证用户手动获取的 token(tokenbylogin 页面登录后复制)。"""
         token = self.auth_token_edit.text().strip()
@@ -346,10 +362,14 @@ class MainWindow(QMainWindow):
         self.auth_token_edit = QLineEdit()
         self.auth_token_edit.setPlaceholderText("tokenbylogin 登录后复制的 JWT(支持邮件验证码/APP扫码)")
         auth_grid.addWidget(self.auth_token_edit, 0, 1, 1, 3)
+        self.get_token_btn = QPushButton("获取 Token")
+        self.get_token_btn.setProperty("link", True)
+        self.get_token_btn.clicked.connect(self._open_token_page)
+        auth_grid.addWidget(self.get_token_btn, 0, 4)
         self.token_btn = QPushButton("验证 Token")
         self.token_btn.setProperty("primary", True)
         self.token_btn.clicked.connect(self._do_verify_token)
-        auth_grid.addWidget(self.token_btn, 0, 4)
+        auth_grid.addWidget(self.token_btn, 0, 5)
 
         auth_grid.addWidget(QLabel("一账通账号"), 1, 0)
         self.auth_user_edit = QLineEdit()
@@ -365,7 +385,7 @@ class MainWindow(QMainWindow):
         self.auth_btn.clicked.connect(self._do_auth_login)
         auth_grid.addWidget(self.auth_btn, 1, 4)
         self.auth_status = hint("未获取权限;推荐: 打开 tokenbylogin 页面登录(邮件/扫码)后粘贴 Token 验证")
-        auth_grid.addWidget(self.auth_status, 2, 0, 1, 5)
+        auth_grid.addWidget(self.auth_status, 2, 0, 1, 6)
         auth_grid.setColumnStretch(1, 1)
         auth_grid.setColumnStretch(3, 1)
         root.addWidget(card("权限登录(IIOT/C4)", auth_grid))

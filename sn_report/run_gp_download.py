@@ -238,7 +238,7 @@ DOMAIN_IP_MAP = {
 
 
 def try_download(url: str, dest: Path, timeout: int = 90) -> Tuple[bool, str]:
-    """先试原 URL,域名解析失败则用代理 IP 替换重试。"""
+    """先试原 URL,域名解析失败则用代理 IP 替换重试;下载后验证图片有效性。"""
     candidates = [url]
     for dom, ip in DOMAIN_IP_MAP.items():
         if dom in url:
@@ -252,6 +252,15 @@ def try_download(url: str, dest: Path, timeout: int = 90) -> Tuple[bool, str]:
                 data = resp.read()
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(data)
+            # 验证是有效图片(Pillow 能识别);否则视为下载失败
+            try:
+                from PIL import Image as _PilImage
+                with _PilImage.open(dest) as p:
+                    p.verify()
+            except Exception as exc:  # noqa: BLE001
+                dest.unlink(missing_ok=True)
+                last_err = f"非有效图片: {str(exc)[:50]}"
+                continue
             return True, u
         except Exception as exc:  # noqa: BLE001
             last_err = str(exc)

@@ -44,39 +44,60 @@ def _station_imgs(per_sn: Dict[str, Any], station: str, sn: str) -> List[Dict[st
     return imgs
 
 
-def _place_image(ws, img: Dict[str, Any], row: int, col: int) -> None:
-    """把图片转为 JPEG 后插入单元格 (row, col),按行高 120 缩放。"""
+def _place_image(ws, img: Dict[str, Any], row: int, col: int) -> bool:
+    """把图片转为 JPEG 后插入单元格 (row, col),按行高 120 缩放。
+
+    成功返回 True;图片缺失/损坏时在单元格写入下载链接,返回 False。
+    """
     path = img.get("dest") or ""
-    if not path or not Path(path).exists():
-        return
-    try:
-        with PilImage.open(path) as p:
-            w, h = p.size
-    except Exception:
-        w, h = 200, 120
-    if h <= 0:
-        return
-    # 统一转 JPEG,避免 Excel 里出现 PNG
-    try:
-        tmp = Path(tempfile.gettempdir()) / (
-            f"xl_{abs(hash(str(path)))}_{Path(path).stem[:10]}.jpg"
+    ok = False
+    if path and Path(path).exists():
+        try:
+            with PilImage.open(path) as p:
+                w, h = p.size
+                p.verify()
+            ok = True
+        except Exception:
+            ok = False
+    if ok:
+        # 统一转 JPEG,避免 Excel 里出现 PNG
+        try:
+            tmp = Path(tempfile.gettempdir()) / (
+                f"xl_{abs(hash(str(path)))}_{Path(path).stem[:10]}.jpg"
+            )
+            with PilImage.open(path) as p:
+                p.verify()
+            with PilImage.open(path) as p:
+                p.convert("RGB").save(tmp, "JPEG", quality=92)
+            path = tmp
+        except Exception as exc:  # noqa: BLE001
+            print(f"  [excel] JPEG 转换失败: {str(exc)[:60]}")
+            ok = False
+    if ok and h <= 0:
+        ok = False
+    if ok:
+        target_h = ROW_HEIGHT - 2 * IMG_MARGIN
+        scale = target_h / h
+        iw = int(w * scale)
+        if iw > 0:
+            xl = XlImage(str(path))
+            xl.width = iw
+            xl.height = int(h * scale)
+            xl.anchor = f"{get_column_letter(col)}{row}"
+            ws.add_image(xl)
+            return True
+    # 图片缺失/损坏: 在单元格写入下载链接(可点击,自动换行)
+    url = str(img.get("url") or "")
+    if url:
+        cell = ws.cell(row=row, column=col)
+        cell.value = url
+        cell.hyperlink = url
+        cell.alignment = Alignment(
+            horizontal="left", vertical="top",
+            wrap_text=True, text_rotation=0,
         )
-        with PilImage.open(path) as p:
-            p.convert("RGB").save(tmp, "JPEG", quality=92)
-        path = tmp
-    except Exception:
-        pass
-    target_h = ROW_HEIGHT - 2 * IMG_MARGIN
-    scale = target_h / h
-    iw = int(w * scale)
-    if iw <= 0:
-        return
-    xl = XlImage(str(path))
-    xl.width = iw
-    xl.height = int(h * scale)
-    # 单元格左上角锚点
-    xl.anchor = f"{get_column_letter(col)}{row}"
-    ws.add_image(xl)
+        cell.font = Font(color="007AFF", size=9)
+    return False
 
 
 def build_excel(per_sn: Dict[str, Dict[str, Any]], project: str,
