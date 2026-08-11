@@ -1,5 +1,5 @@
 {
-  "login_url": "http://10.151.128.45:8081/login",
+  "login_url": "http://10.151.128.45:8081/",
   "username": "你的账号",
   "password": "你的密码",
   "resource_url": "http://10.151.128.45:8081/index.aspx?project=19&custom=LH_Apple_APP003&num=KH297",

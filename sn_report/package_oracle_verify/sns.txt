@@ -1,0 +1,2 @@
+# 每行一个 Module SN,验证完成后把 verify_output/ 整个拷回来
+DNMHTV000F50000Y2N+2001+Q

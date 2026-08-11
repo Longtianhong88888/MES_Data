@@ -1,0 +1,342 @@
+[
+ {
+  "station": "CA",
+  "mc": "MI_FOL_PNP_MC_ID",
+  "carrier": "MI_FOL_PNP_Carrier_ID",
+  "pocket": "MI_FOL_PNP_Carrier_Pocket",
+  "lot": "MI_FOL_PNP_Lot_ID_1",
+  "start_time": "MI_FOL_PNP_Carrier_Start_Time",
+  "end_time": "MI_FOL_PNP_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "FC",
+  "mc": "MI_FCB_MC_ID",
+  "carrier": "MI_FCB_Carrier_ID",
+  "pocket": "MI_FCB_Carrier_Pocket",
+  "lot": "MI_FCB_Lot_ID_1",
+  "start_time": "MI_FCB_Carrier_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "UF",
+  "mc": "MI_UF_MC_ID",
+  "carrier": "MI_UF_Carrier_ID",
+  "pocket": "MI_UF_Carrier_Pocket",
+  "lot": "MI_UF_Lot_ID_1",
+  "start_time": "MI_UF_Carrier_Start_Time",
+  "end_time": "MI_UF_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "UVI",
+  "mc": "MI_UF_AVI_MC_ID",
+  "carrier": "MI_UF_AVI_Carrier_ID",
+  "pocket": "MI_UF_AVI_Carrier_Pocket",
+  "lot": "MI_UF_AVI_Lot_ID_1",
+  "start_time": "MI_UF_AVI_Carrier_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "SSA",
+  "mc": "MI_SS_A_MC_ID",
+  "carrier": "MI_SS_A_Carrier_ID",
+  "pocket": "MI_SS_A_Carrier_Pocket",
+  "lot": "MI_SS_A_Lot_ID_1",
+  "start_time": "MI_SS_A_Carrier_Start_Time",
+  "end_time": "MI_SS_A_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "DT",
+  "mc": "MI_DUST_T_MC_ID",
+  "carrier": "MI_DUST_T_Carrier_ID",
+  "pocket": "MI_DUST_T_Carrier_Pocket",
+  "lot": "MI_DUST_T_Lot_ID_1",
+  "start_time": "MI_DUST_T_Carrier_Start_Time",
+  "end_time": "MI_DUST_T_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "VCMPNP",
+  "mc": "MI_VCM_PNP_MC_ID",
+  "carrier": "MI_VCM_PNP_Carrier_ID",
+  "pocket": "MI_VCM_PNP_Carrier_Pocket",
+  "lot": "MI_VCM_PNP_Lot_ID_1",
+  "start_time": "MI_VCM_PNP_Carrier_Start_Time",
+  "end_time": "MI_VCM_PNP_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "VCMFLIP",
+  "mc": "MI_VCM_Flipping_MC_ID",
+  "carrier": "",
+  "pocket": "",
+  "lot": "MI_VCM_Flipping_Lot_ID",
+  "start_time": "MI_VCM_Flipping_Carrier_Start_Time",
+  "end_time": "MI_VCM_Flipping_Carrier_End_Time",
+  "model": "Cali"
+ },
+ {
+  "station": "VCM PNP",
+  "mc": "MI_VCM_PNP_MC_ID",
+  "carrier": "MI_VCM_PNP_Carrier_ID",
+  "pocket": "MI_VCM_PNP_Carrier_Pocket",
+  "lot": "MI_VCM_PNP_Lot_ID_1",
+  "start_time": "MI_VCM_PNP_Carrier_Start_Time",
+  "end_time": "MI_VCM_PNP_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "VA",
+  "mc": "MI_VCM_A_MC_ID",
+  "carrier": "MI_VCM_A_Carrier_ID",
+  "pocket": "MI_VCM_A_Carrier_Pocket",
+  "lot": "MI_VCM_A_Lot_ID_1",
+  "start_time": "MI_VCM_A_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "IRPP",
+  "mc": "MI_IRCF_PP_MC_ID",
+  "carrier": "MI_IRCF_PP_Carrier_ID",
+  "pocket": "MI_IRCF_PP_Carrier_Pocket",
+  "lot": "MI_IRCF_PP_Lot_ID_1",
+  "start_time": "MI_IRCF_PP_Carrier_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "TA",
+  "mc": "MI_TAPE_A_MC_ID",
+  "carrier": "MI_TAPE_A_Carrier_ID",
+  "pocket": "MI_TAPE_A_Carrier_Pocket",
+  "lot": "MI_TAPE_A_Lot_ID_1",
+  "start_time": "MI_TAPE_A_Carrier_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "VS",
+  "mc": "MI_VCM_SEAL_MC_ID",
+  "carrier": "MI_VCM_SEAL_Carrier_ID",
+  "pocket": "MI_VCM_SEAL_Carrier_Pocket",
+  "lot": "MI_VCM_SEAL_Lot_ID_1",
+  "start_time": "MI_VCM_SEAL_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "JS",
+  "mc": "MI_JS_West_TERM_MC_ID",
+  "carrier": "MI_JS_West_TERM_Carrier_ID",
+  "pocket": "MI_JS_West_TERM_Carrier_Pocket",
+  "lot": "MI_JS_West_TERM_Lot_ID_1",
+  "start_time": "MI_JS_West_TERM_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "EA",
+  "mc": "MI_ENC_A_MC_ID",
+  "carrier": "MI_ENC_A_Carrier_ID",
+  "pocket": "MI_ENC_A_Carrier_Pocket",
+  "lot": "MI_ENC_A_Lot_ID_1",
+  "start_time": "MI_ENC_A_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "TD",
+  "mc": "MI_TAPE_DTA_MC_ID",
+  "carrier": "MI_TAPE_DTA_Carrier_ID",
+  "pocket": "",
+  "lot": "MI_TAPE_DTA_Lot_ID_1",
+  "start_time": "MI_TAPE_DTA_Carrier_Start_Time",
+  "end_time": "MI_TAPE_DTA_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "Harrison",
+  "mc": "MI_HA_MC_ID",
+  "carrier": "MI_HA_Carrier_ID",
+  "pocket": "MI_HA_Carrier_Pocket",
+  "lot": "MI_HA_Lot_ID_1",
+  "start_time": "MI_HA_Start_Time",
+  "end_time": "MI_HA_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "HFB",
+  "mc": "MI_HFB_MC_ID",
+  "carrier": "MI_HFB_Carrier_ID",
+  "pocket": "MI_HFB_Carrier_Pocket",
+  "lot": "MI_HFB_Lot_ID_1",
+  "start_time": "MI_HFB_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "AA",
+  "mc": "MI_LENS_AA_MC_ID",
+  "carrier": "MI_LENS_AA_Carrier_ID",
+  "pocket": "MI_LENS_AA_Carrier_Pocket",
+  "lot": "MI_LENS_AA_Lot_ID_1",
+  "start_time": "MI_LENS_AA_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "HFS",
+  "mc": "MI_HFS_MC_ID",
+  "carrier": "MI_HFS_Carrier_ID",
+  "pocket": "MI_HFS_Carrier_Pocket",
+  "lot": "MI_HFS_Lot_ID_1",
+  "start_time": "MI_HFS_Start_Time",
+  "end_time": "MI_HFS_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "SF",
+  "mc": "MI_STIF_SF_MC_ID",
+  "carrier": "MI_STIF_SF_Carrier_ID",
+  "pocket": "MI_STIF_SF_Carrier_Pocket",
+  "lot": "MI_STIF_SF_Lot_ID_1",
+  "start_time": "MI_STIF_SF_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "LM",
+  "mc": "MI_LSM_MC_ID",
+  "carrier": "MI_LSM_Carrier_ID",
+  "pocket": "MI_LSM_Carrier_Pocket",
+  "lot": "MI_LSM_Lot_ID_1",
+  "start_time": "MI_LSM_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "ACF",
+  "mc": "MI_ACF_BOND_MC_ID",
+  "carrier": "MI_ACF_BOND_Carrier_ID",
+  "pocket": "MI_ACF_BOND_Carrier_Pocket",
+  "lot": "MI_ACF_BOND_Lot_ID_1",
+  "start_time": "MI_ACF_BOND_Carrier_Start_Time",
+  "end_time": "MI_ACF_BOND_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "HTD",
+  "mc": "MI_HTD_MC_ID",
+  "carrier": "MI_HTD_Carrier_ID",
+  "pocket": "MI_HTD_Carrier_Pocket",
+  "lot": "MI_HTD_Lot_ID_1",
+  "start_time": "MI_HTD_Carrier_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "SA",
+  "mc": "MI_SA_MC_ID",
+  "carrier": "MI_SA_Carrier_ID",
+  "pocket": "",
+  "lot": "MI_SA_Lot_ID",
+  "start_time": "MI_SA_Carrier_Start_Time",
+  "end_time": "",
+  "model": "Cali"
+ },
+ {
+  "station": "BD",
+  "mc": "MI_PDI_MC_ID",
+  "carrier": "MI_PDI_Carrier_ID",
+  "pocket": "MI_PDI_Carrier_Pocket",
+  "lot": "MI_PDI_Lot_ID",
+  "start_time": "MI_PDI_Start_Time",
+  "end_time": "",
+  "model": "Cali"
+ },
+ {
+  "station": "FR",
+  "mc": "MI_PDI_MC_ID",
+  "carrier": "MI_PDI_Carrier_ID",
+  "pocket": "MI_PDI_Carrier_Pocket",
+  "lot": "MI_PDI_Lot_ID",
+  "start_time": "MI_PDI_Start_Time",
+  "end_time": "",
+  "model": "Cali"
+ },
+ {
+  "station": "FB",
+  "mc": "MI_Bending_MC_ID",
+  "carrier": "",
+  "pocket": "",
+  "lot": "MI_Bending_Lot_ID",
+  "start_time": "MI_Bending_Start_Time",
+  "end_time": "",
+  "model": "Cali"
+ },
+ {
+  "station": "LS",
+  "mc": "MI_LSM_PNP_MC_ID",
+  "carrier": "MI_LSM_PNP_Carrier_ID",
+  "pocket": "MI_LSM_PNP_Carrier_Pocket",
+  "lot": "MI_LSM_PNP_Lot_ID_1",
+  "start_time": "MI_LSM_PNP_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "CUBEPNP",
+  "mc": "MI_Cube_PnP_MC_ID",
+  "carrier": "",
+  "pocket": "",
+  "lot": "MI_Cube_PnP_Lot_ID",
+  "start_time": "",
+  "end_time": "",
+  "model": "Cali"
+ },
+ {
+  "station": "Lens PNP",
+  "mc": "MI_Lens_PNP_MC_ID",
+  "carrier": "MI_Lens_PNP_Carrier_ID",
+  "pocket": "",
+  "lot": "MI_Lens_PNP_Lot_ID_1",
+  "start_time": "MI_Lens_PNP_Carrier_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "PP",
+  "mc": "MI_PP_MC_ID",
+  "carrier": "MI_PP_Carrier_ID",
+  "pocket": "MI_PP_Carrier_Pocket",
+  "lot": "MI_PP_Lot_ID_1",
+  "start_time": "MI_PP_Carrier_Start_Time",
+  "end_time": "",
+  "model": "BUF"
+ },
+ {
+  "station": "IRCF",
+  "mc": "MI_IRCF_A_MC_ID",
+  "carrier": "MI_IRCF_A_Carrier_ID",
+  "pocket": "MI_IRCF_A_Carrier_Pocket",
+  "lot": "MI_IRCF_A_Lot_ID_1",
+  "start_time": "MI_IRCF_A_Carrier_Start_Time",
+  "end_time": "MI_IRCF_A_Carrier_End_Time",
+  "model": "BUF"
+ },
+ {
+  "station": "LBI",
+  "mc": "MI_LENS_Barrel_Insertion_MC_ID",
+  "carrier": "",
+  "pocket": "",
+  "lot": "MI_LENS_Barrel_Insertion_Lot_ID",
+  "start_time": "MI_LENS_Barrel_Insertion_Carrier_Start_Time",
+  "end_time": "MI_LENS_Barrel_Insertion_Carrier_End_Time",
+  "model": "Cali"
+ }
+]

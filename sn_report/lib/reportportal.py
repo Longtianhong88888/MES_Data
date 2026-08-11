@@ -50,6 +50,12 @@ def _portal_time(value: str) -> str:
     return value
 
 
+def _norm_pocket(value: str) -> str:
+    """pocket 归一化:"2_3" -> "0203","04_03" -> "0403","15" -> "15"。"""
+    parts = re.findall(r"\d+", str(value))
+    return "".join(p.zfill(2) for p in parts)
+
+
 class ReportPortalClient:
     def __init__(self, mes: MesClient, out_dir: Path):
         self.mes = mes
@@ -232,16 +238,31 @@ class ReportPortalClient:
 
     # -------------------------------------------------------------- MC IMG
     def mc_img_query(self, rec: SnRecord, img_stations: List[Dict[str, str]],
-                     start: str, end: str, download_images: bool) -> None:
-        """按站位查询 MC IMG,收集 PR 图片链接/元数据/Excel 导出。"""
+                     start: str, end: str, download_images: bool,
+                     key_map: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None) -> None:
+        """按站位查询 MC IMG,收集 PR 图片链接/元数据/Excel 导出。
+
+        img_stations 支持两种条目:
+        - 旧格式 {"id": station_id, "label": label}:沿用自动发现 SearchType + SN 条件;
+        - 新格式(带 search_type / condition_from / filter):按 trace_key_resolver 解析出的
+          key 构造查询条件,并可用 pocket(文件名 XY)过滤。
+        """
         if not self.portal_origin:
             self.open_portal("MC IMG UpLoadInfo")
         for st in img_stations:
             station_id = st.get("id", "")
             label = st.get("label", station_id)
-            search_type, condition = self._discover_search_type(
-                station_id, rec.sn, rec.sensor_id, rec.flex_id
-            )
+            keys = (key_map or {}).get(label) or (key_map or {}).get(station_id) or {}
+
+            if st.get("search_type") and st.get("condition_from"):
+                search_type = st["search_type"]
+                condition = self._condition_value(rec, keys, st["condition_from"])
+                if not condition:
+                    condition = keys.get("lot") or rec.sn
+            else:
+                search_type, condition = self._discover_search_type(
+                    station_id, rec.sn, rec.sensor_id, rec.flex_id
+                )
             sf = {
                 "Station": station_id,
                 "SearchType": search_type,
@@ -256,12 +277,19 @@ class ReportPortalClient:
                 (self.out_dir / "raw" / f"mcimg_{station_id}.html").write_text(shtml, encoding="utf-8")
 
                 imgs = self._extract_images(shtml)
+                if st.get("filter") == "pocket" and keys.get("carrier") and keys.get("pocket"):
+                    before = len(imgs)
+                    imgs = self._filter_urls_by_pocket(imgs, keys["carrier"], keys["pocket"])
+                    if before != len(imgs):
+                        print(f"    [filter] {label}: pocket {keys['pocket']} 过滤 {before}->{len(imgs)} 张")
                 station = self._find_or_add_station(rec, label)
                 for url in imgs:
                     img = ImageRecord(station=label, url=url)
                     if download_images:
                         img.local_path = self._download_image(url, station_id)
                     station.images.append(img)
+                if keys:
+                    station.extra.setdefault("trace_key", {}).update(keys)
 
                 meta = self._extract_metadata(shtml)
                 if meta:
@@ -270,6 +298,48 @@ class ReportPortalClient:
                 self._save_excel_and_images(shtml, f"mcimg_{station_id}", label)
             except requests.RequestException as exc:
                 rec.errors.append(f"MCIMG {label}: {exc}")
+
+    def _condition_value(self, rec: SnRecord, keys: Dict[str, str],
+                         condition_from: str) -> str:
+        """按 condition_from 取查询 Condition(优先解析出的 key)。"""
+        if condition_from == "carrier":
+            return keys.get("carrier", "")
+        if condition_from == "lot":
+            return keys.get("lot", "")
+        if condition_from == "module_sn":
+            return rec.sn
+        if condition_from == "sensor_id":
+            return rec.sensor_id or keys.get("sensor_id", "")
+        if condition_from == "flex_id":
+            return rec.flex_id or keys.get("flex_id", "")
+        if condition_from == "vcm_id":
+            for c in rec.components:
+                if c.material and "vcm" in c.material.lower():
+                    return c.id
+            return keys.get("vcm_id", "")
+        return ""
+
+    @staticmethod
+    def _filter_urls_by_pocket(urls: List[str], carrier: str, pocket: str) -> List[str]:
+        """按照片文件名里的 载具ID_XY 段过滤(命名规则见追溯明细表)。"""
+        if not urls or not carrier or not pocket:
+            return urls
+        target = _norm_pocket(pocket)
+        if not target:
+            return urls
+        keep: List[str] = []
+        for u in urls:
+            fn = u.split("?")[0].rsplit("/", 1)[-1]
+            pos = fn.find(carrier)
+            if pos >= 0:
+                digits = re.findall(r"\d{2,4}", fn[pos + len(carrier):])
+                if digits and _norm_pocket(digits[0]) == target:
+                    keep.append(u)
+                    continue
+                if digits:
+                    continue  # 载具匹配但 XY 不符,过滤
+            keep.append(u)  # 无法解析文件名时保留,避免误删
+        return keep
 
     def _discover_search_type(
         self, station_id: str, sn: str, sensor_id: str, flex_id: str

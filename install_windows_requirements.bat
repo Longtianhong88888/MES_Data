@@ -1,6 +1,7 @@
 @echo off
-REM Install Python dependencies for this project using the detected Python runtime.
-REM 注意: 如果项目内已有 lib\ 目录(离线依赖,方案B),直接运行 run_windows.bat 即可,无需本脚本。
+REM Install project dependencies on Windows WITHOUT internet access.
+REM 离线方式: 使用项目内 wheels\ 目录的本地安装包(Windows x64 / Python 3.11)。
+REM 联网方式: 若 wheels\ 不存在,则回退到 pip 在线安装。
 SETLOCAL ENABLEDELAYEDEXPANSION
 SET PROJECT_DIR=%~dp0
 PUSHD %PROJECT_DIR%
@@ -60,18 +61,41 @@ IF %ERRORLEVEL% NEQ 0 (
         )
         "%PYTHON_EXE%" get-pip.py >nul 2>&1
         IF %ERRORLEVEL% NEQ 0 (
-            ECHO Failed to install pip from get-pip.py. Please use a Python installation with pip or a complete embeddable package that includes pip.
+            ECHO Failed to install pip from get-pip.py. Please use a Python installation with pip.
             PAUSE
             GOTO END
         )
     )
 )
 
-ECHO Upgrading pip...
-"%PYTHON_EXE%" -m pip install --upgrade pip
+REM 内嵌版 Python 需启用 site(否则第三方包无法导入)
+for %%F in ("%PROJECT_DIR%python\python311._pth" "%PROJECT_DIR%python3\python311._pth") do (
+    if exist %%F (
+        powershell -NoProfile -Command "(Get-Content '%%F') -replace '^#import site','import site' | Set-Content '%%F'"
+    )
+)
 
-ECHO Installing required packages...
-"%PYTHON_EXE%" -m pip install -r requirements.txt
+if exist "%PROJECT_DIR%wheels\" (
+    ECHO [离线模式] 使用本地 wheels\ 安装依赖(无需联网)...
+    "%PYTHON_EXE%" -m pip install --no-index --find-links "%PROJECT_DIR%wheels" -r "%PROJECT_DIR%requirements.txt"
+    IF %ERRORLEVEL% EQU 0 (
+        ECHO.
+        ECHO Dependencies installed OFFLINE.
+        PAUSE
+        GOTO END
+    ) ELSE (
+        ECHO.
+        ECHO 离线安装失败,请确认 wheels\ 目录完整且 Python 版本为 3.11 x64。
+        ECHO 若本机可以联网,也可运行下方在线安装命令重试:
+        ECHO   "%PYTHON_EXE%" -m pip install -r "%PROJECT_DIR%requirements.txt"
+        PAUSE
+        GOTO END
+    )
+)
+
+ECHO [在线模式] 未找到 wheels\ 目录,尝试联网安装...
+"%PYTHON_EXE%" -m pip install --upgrade pip
+"%PYTHON_EXE%" -m pip install -r "%PROJECT_DIR%requirements.txt"
 
 ECHO.
 ECHO Dependencies installed.

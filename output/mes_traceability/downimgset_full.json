@@ -1,0 +1,218 @@
+[
+  {
+    "station": "UF",
+    "filetype": "PPR;PDI;PR",
+    "table": "T_UFIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;snnull"
+  },
+  {
+    "station": "TD",
+    "filetype": "IMG",
+    "table": "t_tdpictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "ACF",
+    "filetype": "CubeInspectPic;PanelPic;AcfInspectPic",
+    "table": "ACFMAINSAVEIMGBAK",
+    "columns": "imgtype;creattime;paths;result;sn;vcmid;sono"
+  },
+  {
+    "station": "IRPP",
+    "filetype": "AOI;PR",
+    "table": "t_irpppictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "FC",
+    "filetype": "PR7;PR6;PR4;PR2;PR1;PR3;PBI;IMG\n",
+    "table": "t_FCpictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "LSLSRESULT",
+    "filetype": "POS1",
+    "table": "T_LSAIIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;sn"
+  },
+  {
+    "station": "LSRESULT",
+    "filetype": "POS1",
+    "table": "T_LSAIRESULTDATA",
+    "columns": "filetype;filetime;url;result;sn"
+  },
+  {
+    "station": "ACFLOAD",
+    "filetype": "IMG;AOI",
+    "table": "ACFLOADSAVEIMGBAK",
+    "columns": "stype;creattime;paths;result;sn;vcmid;sono"
+  },
+  {
+    "station": "EA",
+    "filetype": "ATL;ABL;PD3;PD2;PD1;PD6;PP1;PD5;PD4;ATR;ABR;PB1",
+    "table": "t_eapictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "HFS",
+    "filetype": "PBI;PPR",
+    "table": "t_hfspictureupload",
+    "columns": "filetype;filetime;ftppath;result;sn"
+  },
+  {
+    "station": "PP",
+    "filetype": "DIEI;DIA",
+    "table": "t_pppictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "CUBEFLIP",
+    "filetype": "IMG",
+    "table": "CUBEFLIPIMGUPLOADBAK",
+    "columns": "filetype;filetime;ftppath;passflag;snnull"
+  },
+  {
+    "station": "TA",
+    "filetype": "IMG",
+    "table": "t_tapictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "LCBT",
+    "filetype": "LCB;PPR;OCA",
+    "table": "t_lcbtpictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull;sensorid"
+  },
+  {
+    "station": "DA",
+    "filetype": "PBI;PDI;PR",
+    "table": "T_DAIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;snnull"
+  },
+  {
+    "station": "LSAI",
+    "filetype": "POS1",
+    "table": "T_LSAIIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;sn"
+  },
+  {
+    "station": "DT",
+    "filetype": "PPR;PR;PDI;DTPR",
+    "table": "T_DTIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;snnull"
+  },
+  {
+    "station": "AVI",
+    "filetype": "PC1;PC2;PC3;PC4;PC4;PC5;PC6;PC7",
+    "table": "AVIIMGUPLOADBAK",
+    "columns": "filetype;filetime;ftppath;passflag;sn"
+  },
+  {
+    "station": "LS",
+    "filetype": "PPR;PDI;POS1",
+    "table": "t_lspictureupload",
+    "columns": "filetype;filetime;ftppath;result;sn;vcmid;sono"
+  },
+  {
+    "station": "CAWLWM",
+    "filetype": "LWM",
+    "table": "t_cawcsvupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "GA",
+    "filetype": "PR;PBI;PDI;PB2",
+    "table": "T_GAIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;snnull"
+  },
+  {
+    "station": "LBI",
+    "filetype": "PDI",
+    "table": "t_lbipictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull;vcmid"
+  },
+  {
+    "station": "SSA",
+    "filetype": "PPR;PR;PDI;PBI\n",
+    "table": "T_SSAIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;snnull"
+  },
+  {
+    "station": "JSE",
+    "filetype": "PBI;PDI;PR;PR2;PB1;PB2",
+    "table": "t_jspictureupload",
+    "columns": "filetype;filetime;ftppath;result;sn"
+  },
+  {
+    "station": "VA",
+    "filetype": "PR;PDI",
+    "table": "T_VAIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;snnull"
+  },
+  {
+    "station": "VS",
+    "filetype": "PPR;PDI;PR",
+    "table": "t_vspictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "AA",
+    "filetype": "PDI",
+    "table": "t_vcmaapictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull;sensorid"
+  },
+  {
+    "station": "SF",
+    "filetype": "PR;PPR;PDI",
+    "table": "t_sfpictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "JS",
+    "filetype": "PBI;PDI;PR;PR2;PB1;PB2",
+    "table": "t_jspictureupload",
+    "columns": "filetype;filetime;ftppath;result;sn"
+  },
+  {
+    "station": "UFAI",
+    "filetype": "PDI",
+    "table": "T_UFAIIMAGEUPLOAD",
+    "columns": "filetype;filetime;url;result;snnull"
+  },
+  {
+    "station": "HLA",
+    "filetype": "PR8;PR7;PD2;PB2;PD1;PR6;PR5;PDI1;PDI2;PBI3;PBI2;PR9;PR4;PR1;PR2;PB1;PBI1;PR3",
+    "table": "t_hapictureupload",
+    "columns": "filetype;filetime;ftppath;result;snnull"
+  },
+  {
+    "station": "CA",
+    "filetype": "PPR;img",
+    "table": "caimguploadbak",
+    "columns": "filetype;filetime;ftppath;passflag;snnull"
+  },
+  {
+    "station": "AA1",
+    "filetype": "D1D0;D1D1;VTT1;VTT0",
+    "table": "AAIMGUPLOADBAK",
+    "columns": "filetype;filetime;ftppath;passflag;snnull;sensorid"
+  },
+  {
+    "station": "CFA",
+    "filetype": "PPR;AOI;PBI",
+    "table": "CFAIMGUPLOADBAK",
+    "columns": "filetype;filetime;ftppath;passflag;sn"
+  },
+  {
+    "station": "LBT",
+    "filetype": "PDI",
+    "table": "LBTIMGUPLOADBAK",
+    "columns": "filetype;filetime;ftppath;passflag;sn"
+  },
+  {
+    "station": "CAW",
+    "filetype": "PBI;PPR;PR",
+    "table": "t_cawpictureupload",
+    "columns": "filetype;filetime;ftppath;result;sn"
+  }
+]

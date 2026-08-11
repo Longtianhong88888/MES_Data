@@ -45,6 +45,9 @@ run_windows.bat
 说明：
 
 - 依赖存放在 `lib/` 中，由 `main.py` 启动时自动加入 `sys.path`，不需要 pip 安装
+- **完全离线打包**：项目内 `wheels/` 已内置 Windows x64 / Python 3.11 的全部依赖安装包
+  （requests / bs4 / lxml / openpyxl / python-pptx / Pillow / XlsxWriter / **PyQt5 登录界面** 等 18 个），
+  内网电脑无需联网，双击 `install_windows_requirements.bat` 即从本地 wheels 安装
 - 如需在**有外网**的机器上重新生成或升级依赖，可在 Mac 上执行：
   `python3 -m pip download -r requirements.txt --platform win_amd64 --python-version 3.11 --only-binary=:all: -d wheels`
   然后把 `wheels/` 拷到 Windows，运行 `install_windows_requirements.bat`（离线安装到嵌入式 Python）

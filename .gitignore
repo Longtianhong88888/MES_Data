@@ -8,11 +8,15 @@ __pycache__/
 
 # 本地配置与运行产物(含账号密码,禁止上传)
 /config.json
+/config.json.bak
 login_test/login.log
 login_test/*.html
 login_test/downloads/
 sn_report/output/
 sn_report/downloads/
+sn_report/package_oracle_verify/oracle_download/output/
+sn_report/package_oracle_verify/oracle_download/downloads/
+sn_report/package_oracle_verify/.applied_patches.json
 sn_report/build/
 sn_report/dist/
 sn_report/*.spec
@@ -24,6 +28,11 @@ run.log
 /lib/
 /reference/
 /python/
+
+# Oracle 直连部署包:解密连接含内网密码,禁止上传;依赖/运行产物也不入库
+/sn_report/package_oracle_verify/oracle_download/conns.json
+/sn_report/.patch_baseline.json
+*.pptx
 
 # 工具安装包
 /get-pip.py

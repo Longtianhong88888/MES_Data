@@ -65,6 +65,24 @@ def save_log(path: Path) -> None:
     path.write_text("\n".join(_LOG_LINES) + "\n", encoding="utf-8")
 
 
+def open_login_dialog() -> tuple:
+    """弹出 PyQt5 登录界面,返回 (root_cfg, sn_cfg);取消时返回 (None, None)。"""
+    try:
+        from PyQt5.QtWidgets import QApplication
+    except ImportError as exc:  # noqa: BLE001
+        raise RuntimeError(
+            "登录界面需要 PyQt5:请安装 PyQt5(打包 exe 时已内置;便携版 Python 需 pip install PyQt5)"
+        ) from exc
+
+    from sn_report.lib.login_dialog import LoginDialog
+
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    dlg = LoginDialog()
+    if dlg.exec_() == LoginDialog.Accepted:
+        return dlg.root_cfg, dlg.sn_cfg
+    return None, None
+
+
 def init_config() -> None:
     path = SN_REPORT_DIR / "config.json"
     if path.exists():
@@ -117,6 +135,27 @@ def run(args: argparse.Namespace) -> int:
     cfg = get_sn_report_config()
     root = get_root_config()
 
+    # 需要登录信息:显式 --login,或根配置缺少账号/密码
+    if args.login or not root.get("username") or not root.get("password"):
+        log("打开登录界面 ...")
+        try:
+            new_root, new_sn = open_login_dialog()
+        except RuntimeError as exc:
+            log(f"无法打开登录界面: {exc}")
+            if not root.get("username") or not root.get("password"):
+                log("请在 config.json 填写账号密码,或安装 PyQt5 后使用登录界面。")
+                return 2
+            new_root, new_sn = None, None
+        if new_root is None:
+            log("已取消登录,退出。")
+            return 0
+        root = new_root
+        if new_sn:
+            cfg_mod._deep_merge(cfg, new_sn)
+            log("登录信息已保存(config.json)。")
+        else:
+            log("登录信息已更新(本次运行有效)。")
+
     sn_report_dir = SN_REPORT_DIR
     out_dir = sn_report_dir / str(cfg["report"]["output_dir"])
     dl_dir = sn_report_dir / str(cfg["report"]["download_dir"])
@@ -156,32 +195,9 @@ def run(args: argparse.Namespace) -> int:
         st = "OK" if not rec.errors else f"WARN({'; '.join(rec.errors[:2])})"
         log(f"  [{i}/{len(sns)}] {sn}: 站位 {len(rec.stations)},组件 {len(rec.components)},状态 {st}")
 
-    # Step 3: ReportPortal MC IMG(PR 图片)
-    if not args.no_images:
-        log("Step 3/5: 查询 MC IMG PR 图片 ...")
-        from sn_report.lib.reportportal import ReportPortalClient
-
-        portal = ReportPortalClient(mes, dl_dir)
-        try:
-            portal.open_portal("MC IMG UpLoadInfo")
-            for i, rec in enumerate(records, start=1):
-                log(f"  MCIMG [{i}/{len(records)}] {rec.sn} ...")
-                portal.mc_img_query(
-                    rec,
-                    cfg.get("img_stations", []),
-                    start,
-                    end,
-                    bool(cfg["report"].get("download_images", False)),
-                )
-                log(f"    图片 {len(rec.all_images())} 张")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  MC IMG 查询失败(继续): {exc}")
-    else:
-        log("Step 3/5: 跳过 MC IMG(--no-images)")
-
-    # Step 4: ACF 测试数据(sensorID / flexid)
+    # Step 3: ACF 测试数据(sensorID / flexid)
     if not args.no_acf:
-        log("Step 4/5: 查询 ACF 测试数据 ...")
+        log("Step 3/6: 查询 ACF 测试数据 ...")
         from sn_report.lib.reportportal import ReportPortalClient
 
         portal = ReportPortalClient(mes, dl_dir)
@@ -193,13 +209,15 @@ def run(args: argparse.Namespace) -> int:
         except Exception as exc:  # noqa: BLE001
             log(f"  ACF 查询失败(继续): {exc}")
     else:
-        log("Step 4/5: 跳过 ACF(--no-acf)")
+        log("Step 3/6: 跳过 ACF(--no-acf)")
 
-    # Step 4.5: C4 批量接口(机台/载板/穴位)
+    # Step 4: C4 批量接口(机台/载板/穴位) -> 每站照片查询 key
     c4_cfg = cfg.get("c4", {})
+    key_map: Dict[str, Dict[str, Dict[str, str]]] = {}
     if args.c4 or c4_cfg.get("enabled"):
-        log("Step 4.5/5: 调用战情中心 C4 批量接口 ...")
+        log("Step 4/6: 调用战情中心 C4 批量接口并解析每站查询 key ...")
         from sn_report.lib.c4_client import C4Client
+        from sn_report.lib.trace_key_resolver import TraceKeyResolver
 
         if not c4_cfg.get("token"):
             log("  C4 token 为空,跳过(请先在 config.json 填入 c4.token)")
@@ -213,15 +231,42 @@ def run(args: argparse.Namespace) -> int:
                     type_=c4_cfg.get("type", "8S01"),
                     extra_params=c4_cfg.get("extra_params", {}),
                 )
-                client.apply_to_records(records, c4_cfg.get("columns", []))
-                log("  C4 列已合并进站位记录")
+                resolver = TraceKeyResolver(client, c4_cfg.get("columns", []))
+                key_map = resolver.resolve_to_records(records)
+                n = sum(1 for k in key_map.values() if k)
+                log(f"  C4 key 解析完成:{n}/{len(records)} 个 SN 有站位 key")
             except Exception as exc:  # noqa: BLE001
-                log(f"  C4 查询失败(继续): {exc}")
+                log(f"  C4 key 解析失败(继续): {exc}")
     else:
-        log("Step 4.5/5: 跳过 C4(用 --c4 或在 config.json 启用)")
+        log("Step 4/6: 跳过 C4(用 --c4 或在 config.json 启用)")
+
+    # Step 5: ReportPortal MC IMG(PR 图片,按每站 key 查询)
+    if not args.no_images:
+        log("Step 5/6: 查询 MC IMG PR 图片(按每站 key) ...")
+        from sn_report.lib.reportportal import ReportPortalClient
+
+        portal = ReportPortalClient(mes, dl_dir)
+        try:
+            portal.open_portal("MC IMG UpLoadInfo")
+            img_stations = cfg.get("img_stations_all") or cfg.get("img_stations", [])
+            for i, rec in enumerate(records, start=1):
+                log(f"  MCIMG [{i}/{len(records)}] {rec.sn} ...")
+                portal.mc_img_query(
+                    rec,
+                    img_stations,
+                    start,
+                    end,
+                    bool(cfg["report"].get("download_images", False)),
+                    key_map=key_map,
+                )
+                log(f"    图片 {len(rec.all_images())} 张")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  MC IMG 查询失败(继续): {exc}")
+    else:
+        log("Step 5/6: 跳过 MC IMG(--no-images)")
 
     # Step 5: 生成 PPT
-    log("Step 5/5: 生成 PPT 报告 ...")
+    log("Step 6/6: 生成 PPT 报告 ...")
     out_path = Path(args.out) if args.out else out_dir / str(cfg["report"]["ppt_name"])
     if not out_path.is_absolute():
         out_path = PROJECT_DIR / out_path
@@ -257,6 +302,7 @@ def main() -> int:
     parser.add_argument("--no-acf", action="store_true", help="跳过 ACF 测试数据查询")
     parser.add_argument("--c4", action="store_true", help="启用 C4 批量接口(机台/载板/穴位)")
     parser.add_argument("--init-config", action="store_true", help="生成默认配置后退出")
+    parser.add_argument("--login", action="store_true", help="弹出登录界面,输入账号/C4 Token/时间窗")
     args = parser.parse_args()
 
     ensure_windows_lib()

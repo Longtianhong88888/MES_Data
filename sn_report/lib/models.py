@@ -70,6 +70,7 @@ class SnRecord:
     consumables: List[ConsumableRecord] = field(default_factory=list)
     sensor_id: str = ""
     flex_id: str = ""
+    trace_keys: Dict[str, Dict[str, str]] = field(default_factory=dict)
     acf_excels: List[str] = field(default_factory=list)
     raw_tables: List[Dict[str, Any]] = field(default_factory=list)
     raw_files: List[str] = field(default_factory=list)
