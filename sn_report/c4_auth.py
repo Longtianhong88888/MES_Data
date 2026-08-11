@@ -62,20 +62,40 @@ class C4Auth:
         return True, token
 
     def verify(self) -> Tuple[bool, str]:
-        """IIOT VerifySignatureAndCode 验证 JWT,通过后获得访问权限。"""
-        if not self.token:
-            return False, "未登录"
+        """IIOT VerifySignatureAndCode 验证当前 JWT。"""
+        return self.verify_token(self.token or "")
+
+    def verify_token(self, token: str) -> Tuple[bool, str]:
+        """验证用户手动获取的 JWT。
+
+        VerifySignatureAndCode 对完整 JWT 会报 Invalid signature(它要的是从
+        JWT 提取的片段),因此以 GetInformationDT 实测为准:能查到 BOI-T
+        即说明 token 有效、服务端授予了访问权限。
+        """
+        if not token:
+            return False, "token 为空"
+        self.token = token
+        # 用 GetInformationDT 实测(BOI-T 是服务端已配置的机种)
+        ok, payload = self.get_information_dt(
+            device="BOI-T",
+            sn="DNMHTV000F50000Y2N+2001+Q",
+            columns=["sn"],
+        )
+        if ok:
+            return True, "验证通过(token 有效,服务端授予访问权限)"
+        msg = str(payload.get("message") or payload.get("Message") or "验证失败")
+        # 兼容: 若 GetInformationDT 未配置但 VerifySignatureAndCode 通过
         url = self.VERIFY_URL + "?" + urllib.parse.urlencode(
-            {"signedDataString": self.token})
+            {"signedDataString": token})
         req = urllib.request.Request(url, headers={"User-Agent": self.UA})
         try:
             resp = urllib.request.urlopen(req, timeout=self.timeout)
             data = json.loads(resp.read().decode("utf-8", "replace"))
-        except Exception as exc:  # noqa: BLE001
-            return False, f"验证请求失败: {exc}"
-        if data.get("status"):
-            return True, "验证通过"
-        return False, str(data.get("message") or "验证失败")
+            if data.get("status"):
+                return True, "验证通过(VerifySignatureAndCode)"
+        except Exception:
+            pass
+        return False, msg
 
     def authorize(self, userid: str, password: str, ip: str = "") -> Tuple[bool, str]:
         """老版 AuthorizeEndpoint(转调 Foxconn SSO)。"""

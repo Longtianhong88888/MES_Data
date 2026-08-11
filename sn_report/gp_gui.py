@@ -206,29 +206,40 @@ class DownloadWorker(QThread):
 
 
 class AuthWorker(QThread):
-    """后台执行 C4 登录+IIOT 验证。"""
+    """后台执行 C4 登录(token 获取或粘贴验证)+ IIOT 验证。"""
     log_line = pyqtSignal(str)
     done = pyqtSignal(bool, str, str)  # (success, token, message)
 
-    def __init__(self, userid: str, password: str):
+    def __init__(self, userid: str = "", password: str = "", token: str = ""):
         super().__init__()
         self.userid = userid
         self.password = password
+        self.token = token
 
     def run(self):
         auth = C4Auth()
-        ok, msg = auth.login(self.userid, self.password)
-        if not ok:
-            self.log_line.emit(f"登录失败: {msg}")
-            self.done.emit(False, "", msg)
-            return
-        self.log_line.emit("一账通登录成功,已获取 JWT")
+        if self.token:
+            # 用户手动验证(MFA 后)粘贴 token
+            auth.token = self.token.strip()
+            self.log_line.emit("验证手动获取的 token ...")
+        else:
+            # 账号密码登录(仅在不要求 MFA 的场景可用)
+            ok, msg = auth.login(self.userid, self.password)
+            if not ok:
+                self.log_line.emit(f"账号密码登录失败: {msg}")
+                self.log_line.emit("提示: 系统可能要求邮件验证码/APP 扫码,"
+                                   "请在 tokenbylogin 页面手动登录后粘贴 Token。")
+                self.done.emit(False, "", msg)
+                return
+            self.log_line.emit("一账通登录成功,已获取 JWT")
         # IIOT 验证
         ok2, msg2 = auth.verify()
         if ok2:
             self.log_line.emit("IIOT 鉴权通过,获得访问权限")
         else:
-            self.log_line.emit(f"IIOT 鉴权提示: {msg2}(继续)")
+            self.log_line.emit(f"IIOT 鉴权提示: {msg2}")
+            self.done.emit(False, "", f"鉴权失败: {msg2}")
+            return
         # 保存 token
         try:
             import json as _json
@@ -275,6 +286,7 @@ class MainWindow(QMainWindow):
         help_menu.addAction("关于", self._show_about)
 
     def _do_auth_login(self):
+        """账号密码登录(仅在不要求 MFA 的场景可用)。"""
         userid = self.auth_user_edit.text().strip()
         password = self.auth_pwd_edit.text()
         if not userid or not password:
@@ -282,13 +294,33 @@ class MainWindow(QMainWindow):
             return
         self.auth_btn.setEnabled(False)
         self.auth_status.setText("正在登录获取权限 ...")
-        self._append_log("[权限] 开始登录 ...")
-        self.auth_worker = AuthWorker(userid, password)
+        self._append_log("[权限] 开始账号密码登录 ...")
+        self.auth_worker = AuthWorker(userid=userid, password=password)
+        self.auth_worker.log_line.connect(self._append_log)
+        self.auth_worker.done.connect(self._auth_done)
+        self.auth_worker.start()
+
+    def _do_verify_token(self):
+        """验证用户手动获取的 token(tokenbylogin 页面登录后复制)。"""
+        token = self.auth_token_edit.text().strip()
+        if not token:
+            QMessageBox.warning(
+                self, "提示",
+                "请先在 tokenbylogin 页面登录后复制 Token:\n"
+                "http://10.151.130.134:8086/#/tokenbylogin\n"
+                "(支持邮件验证码 / APP 扫码验证)",
+            )
+            return
+        self.token_btn.setEnabled(False)
+        self.auth_status.setText("正在验证 Token ...")
+        self._append_log("[权限] 开始验证手动 Token ...")
+        self.auth_worker = AuthWorker(token=token)
         self.auth_worker.log_line.connect(self._append_log)
         self.auth_worker.done.connect(self._auth_done)
         self.auth_worker.start()
 
     def _auth_done(self, ok: bool, token: str, message: str):
+        self.token_btn.setEnabled(True)
         self.auth_btn.setEnabled(True)
         if ok:
             self.auth_status.setStyleSheet("color: #34C759;")
@@ -310,21 +342,30 @@ class MainWindow(QMainWindow):
         auth_grid = QGridLayout()
         auth_grid.setVerticalSpacing(6)
         auth_grid.setHorizontalSpacing(8)
-        auth_grid.addWidget(QLabel("一账通账号"), 0, 0)
+        auth_grid.addWidget(QLabel("粘贴 Token"), 0, 0)
+        self.auth_token_edit = QLineEdit()
+        self.auth_token_edit.setPlaceholderText("tokenbylogin 登录后复制的 JWT(支持邮件验证码/APP扫码)")
+        auth_grid.addWidget(self.auth_token_edit, 0, 1, 1, 3)
+        self.token_btn = QPushButton("验证 Token")
+        self.token_btn.setProperty("primary", True)
+        self.token_btn.clicked.connect(self._do_verify_token)
+        auth_grid.addWidget(self.token_btn, 0, 4)
+
+        auth_grid.addWidget(QLabel("一账通账号"), 1, 0)
         self.auth_user_edit = QLineEdit()
-        self.auth_user_edit.setPlaceholderText("工号")
-        auth_grid.addWidget(self.auth_user_edit, 0, 1)
-        auth_grid.addWidget(QLabel("密码"), 0, 2)
+        self.auth_user_edit.setPlaceholderText("工号(仅账号密码登录用)")
+        auth_grid.addWidget(self.auth_user_edit, 1, 1)
+        auth_grid.addWidget(QLabel("密码"), 1, 2)
         self.auth_pwd_edit = QLineEdit()
         self.auth_pwd_edit.setEchoMode(QLineEdit.Password)
-        self.auth_pwd_edit.setPlaceholderText("一账通密码")
-        auth_grid.addWidget(self.auth_pwd_edit, 0, 3)
-        self.auth_btn = QPushButton("登录获取权限")
-        self.auth_btn.setProperty("primary", True)
+        self.auth_pwd_edit.setPlaceholderText("一账通密码(可选)")
+        auth_grid.addWidget(self.auth_pwd_edit, 1, 3)
+        self.auth_btn = QPushButton("账号密码登录")
+        self.auth_btn.setProperty("secondary", True)
         self.auth_btn.clicked.connect(self._do_auth_login)
-        auth_grid.addWidget(self.auth_btn, 0, 4)
-        self.auth_status = hint("未登录")
-        auth_grid.addWidget(self.auth_status, 1, 0, 1, 5)
+        auth_grid.addWidget(self.auth_btn, 1, 4)
+        self.auth_status = hint("未获取权限;推荐: 打开 tokenbylogin 页面登录(邮件/扫码)后粘贴 Token 验证")
+        auth_grid.addWidget(self.auth_status, 2, 0, 1, 5)
         auth_grid.setColumnStretch(1, 1)
         auth_grid.setColumnStretch(3, 1)
         root.addWidget(card("权限登录(IIOT/C4)", auth_grid))
