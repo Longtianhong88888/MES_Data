@@ -159,7 +159,7 @@ class GreenplumSerin:
         return dict(zip(self.columns(table), rows[0]))
 
     def resolve_project(self, sn: str) -> str:
-        """SN 所属专案:在哪个专案 EOL 表能查到,默认 boi。"""
+        """SN 所属专案:先查图片表,再查 eoldata 测试表,默认 boi。"""
         for proj in self.list_projects():
             try:
                 rec = self.eol_by_sn(sn, proj)
@@ -167,7 +167,36 @@ class GreenplumSerin:
                     return proj
             except Exception:
                 continue
+        # 图片表没有,查 eoldata 定位专案(有测试数据但无图片)
+        for proj in self.list_projects():
+            try:
+                rows = self.q(
+                    f"select count(*) from datacenterdev.t_{esc(proj)}_eoldata "
+                    f"where sn='{esc(sn)}'"
+                )
+                if rows and rows[0][0] > 0:
+                    return proj
+            except Exception:
+                continue
         return "boi"
+
+    def has_eol_pictures(self, sn: str, project: str) -> bool:
+        """该专案图片表是否有此 SN 的图片记录。"""
+        try:
+            return self.eol_by_sn(sn, project) is not None
+        except Exception:
+            return False
+
+    def has_eoldata(self, sn: str, project: str) -> bool:
+        """该专案 eoldata 是否有此 SN 的测试/生产记录。"""
+        try:
+            rows = self.q(
+                f"select count(*) from datacenterdev.t_{esc(project)}_eoldata "
+                f"where sn='{esc(sn)}'"
+            )
+            return bool(rows and rows[0][0] > 0)
+        except Exception:
+            return False
 
 
 STATION_KEYWORDS = [
@@ -330,7 +359,7 @@ def run(args: argparse.Namespace) -> int:
             except Exception as exc:  # noqa: BLE001
                 log(f"  EOL 查询失败: {str(exc)[:100]}")
         else:
-            # 自动:在全部专案中找有数据的
+            # 自动:先图片表,再 eoldata 定位专案
             for proj in gp.list_projects():
                 try:
                     eol = gp.eol_by_sn(sn, proj)
@@ -341,6 +370,12 @@ def run(args: argparse.Namespace) -> int:
                     continue
             if eol:
                 log(f"  专案识别: {used_project}")
+            else:
+                # 图片表都没有:查 eoldata 看是否有测试数据
+                for proj in gp.list_projects():
+                    if gp.has_eoldata(sn, proj):
+                        log(f"  该 SN 属于 {proj} 专案,但有测试数据无图片记录")
+                        break
         if eol:
             imgs = extract_images(eol)
             log(f"  EOL 照片: {len(imgs)} 张")
