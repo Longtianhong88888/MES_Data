@@ -23,7 +23,31 @@ else:
 
 sys.path.insert(0, str(BASE_DIR))
 
+
+def _load_db_config() -> dict:
+    """从 exe 同目录 config.json 读数据库连接(不显示在 UI);默认内置。"""
+    cfg_path = BASE_DIR / "config.json"
+    defaults = {
+        "host": "10.151.130.202",
+        "port": 5432,
+        "database": "wwwgpdw",
+        "user": "gpdwdev",
+        "password": "Altus2014",
+    }
+    cfg = dict(defaults)
+    if cfg_path.exists():
+        try:
+            user_cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
+            cfg.update({k: user_cfg[k] for k in defaults if k in user_cfg})
+        except Exception:
+            pass
+    return cfg
+
+
+DB_CFG = _load_db_config()
+
 from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QMessageBox,
@@ -36,6 +60,17 @@ from run_gp_download import (
     DOMAIN_IP_MAP, load_sn_list,
 )
 from apple_style import APPLE_QSS, C_BG, C_SUB, card, hint
+
+
+def window_target_size(ratio: float = 0.8) -> tuple:
+    """主窗口占屏幕可用区域 80%(与 MC_LogAnalysis 一致)。"""
+    screen = QApplication.primaryScreen()
+    if screen is None:
+        return 980, 720
+    geo = screen.availableGeometry()
+    w = max(860, int(geo.width() * ratio))
+    h = max(640, int(geo.height() * ratio))
+    return w, h
 
 
 class DownloadWorker(QThread):
@@ -161,8 +196,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SN_Report - Greenplum Serin 照片一键下载")
-        self.resize(860, 720)
-        self.setMinimumSize(760, 620)
+        w, h = window_target_size()
+        self.resize(w, h)
+        self.setMinimumSize(max(720, int(w * 0.82)), max(560, int(h * 0.85)))
         self.worker: Optional[DownloadWorker] = None
         self.setStyleSheet(APPLE_QSS)
         self._create_menu()
@@ -189,27 +225,15 @@ class MainWindow(QMainWindow):
         conn_grid = QGridLayout()
         conn_grid.setVerticalSpacing(6)
         conn_grid.setHorizontalSpacing(8)
-        conn_grid.addWidget(QLabel("数据库"), 0, 0)
-        self.host_edit = QLineEdit("10.151.130.202")
-        conn_grid.addWidget(self.host_edit, 0, 1)
-        conn_grid.addWidget(QLabel("账号"), 0, 2)
-        self.user_edit = QLineEdit("gpdwdev")
-        conn_grid.addWidget(self.user_edit, 0, 3)
-        conn_grid.addWidget(QLabel("密码"), 0, 4)
-        self.pwd_edit = QLineEdit("Altus2014")
-        self.pwd_edit.setEchoMode(QLineEdit.Password)
-        conn_grid.addWidget(self.pwd_edit, 0, 5)
-        conn_grid.setColumnStretch(1, 1)
-        conn_grid.setColumnStretch(3, 1)
-        conn_grid.setColumnStretch(5, 1)
-        conn_grid.addWidget(QLabel("专案"), 1, 0)
+        conn_grid.addWidget(QLabel("专案"), 0, 0)
         self.project_combo = QComboBox()
         self.project_combo.addItem("全部(自动识别)", "")
-        self.project_combo.setMinimumWidth(160)
-        conn_grid.addWidget(self.project_combo, 1, 1, 1, 3)
-        self.project_hint = hint("连接后自动列出专案;留空=全部专案逐个查找")
-        conn_grid.addWidget(self.project_hint, 1, 4, 1, 2)
-        root.addWidget(card("数据库连接", conn_grid))
+        self.project_combo.setMinimumWidth(220)
+        conn_grid.addWidget(self.project_combo, 0, 1)
+        conn_grid.setColumnStretch(1, 1)
+        self.project_hint = hint("自动识别专案;或手动指定")
+        conn_grid.addWidget(self.project_hint, 0, 2)
+        root.addWidget(card("查询设置", conn_grid))
 
         # ─── SN 输入卡片 ───
         sn_layout = QVBoxLayout()
@@ -319,12 +343,6 @@ class MainWindow(QMainWindow):
         if not sns:
             QMessageBox.warning(self, "提示", "请先输入 SN 或选择 SN 文件。")
             return
-        host = self.host_edit.text().strip()
-        user = self.user_edit.text().strip()
-        pwd = self.pwd_edit.text()
-        if not host or not user or not pwd:
-            QMessageBox.warning(self, "提示", "请填写数据库连接信息。")
-            return
         dl_dir = Path(self.dir_edit.text().strip() or str(BASE_DIR / "downloads"))
         dl_dir.mkdir(parents=True, exist_ok=True)
         project = self.project_combo.currentData() or ""
@@ -336,7 +354,9 @@ class MainWindow(QMainWindow):
         self.stop_btn.setEnabled(True)
 
         self.worker = DownloadWorker(
-            sns, dl_dir, host, 5432, "wwwgpdw", user, pwd, project=project)
+            sns, dl_dir,
+            DB_CFG["host"], DB_CFG["port"], DB_CFG["database"],
+            DB_CFG["user"], DB_CFG["password"], project=project)
         self.worker.log_line.connect(self._append_log)
         self.worker.progress.connect(lambda i, n: self.progress.setValue(i))
         self.worker.done.connect(self._done)
@@ -346,19 +366,18 @@ class MainWindow(QMainWindow):
         """连接 Greenplum 并刷新专案下拉列表(同步,短暂阻塞)。"""
         if self.project_combo.count() > 1:
             return  # 已加载
-        host = self.host_edit.text().strip()
-        user = self.user_edit.text().strip()
-        pwd = self.pwd_edit.text()
         try:
-            gp = GreenplumSerin(host=host, port=5432, database="wwwgpdw",
-                                user=user, password=pwd)
+            gp = GreenplumSerin(
+                host=DB_CFG["host"], port=DB_CFG["port"],
+                database=DB_CFG["database"],
+                user=DB_CFG["user"], password=DB_CFG["password"])
             gp.connect()
             projs = gp.list_projects()
             for p in projs:
                 self.project_combo.addItem(p.upper(), p)
             self.project_hint.setText(f"已加载 {len(projs)} 个专案")
         except Exception as exc:  # noqa: BLE001
-            self.project_hint.setText(f"专案加载失败: {str(exc)[:60]}")
+            self.project_hint.setText("专案加载失败(检查 config.json 连接配置)")
 
     def _stop(self):
         if self.worker:
@@ -390,7 +409,11 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     try:
+        # 高分屏缩放必须在 QApplication 创建之前(Windows 缩放清晰)
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         app = QApplication(sys.argv[:1])
+        app.setApplicationName("SN_Report")
         win = MainWindow()
         win.show()
         return app.exec_()
