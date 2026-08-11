@@ -198,6 +198,19 @@ class GreenplumSerin:
         except Exception:
             return False
 
+    def match_projects(self, sn: str) -> Dict[str, Dict[str, Any]]:
+        """列出 SN 在所有专案中的匹配情况。
+
+        返回 {专案: {"pictures": bool(图片表有记录), "eoldata": bool(测试/生产表有记录)}}。
+        """
+        result: Dict[str, Dict[str, Any]] = {}
+        for proj in self.list_projects():
+            has_pic = self.has_eol_pictures(sn, proj)
+            has_eol = self.has_eoldata(sn, proj)
+            if has_pic or has_eol:
+                result[proj] = {"pictures": has_pic, "eoldata": has_eol}
+        return result
+
 
 STATION_KEYWORDS = [
     ("CA", "cover attach"), ("FC", "flex"), ("UF", "underfill"),
@@ -360,6 +373,16 @@ def run(args: argparse.Namespace) -> int:
                 log(f"  EOL 查询失败: {str(exc)[:100]}")
         else:
             # 自动:先图片表,再 eoldata 定位专案
+            matches = gp.match_projects(sn)
+            if matches:
+                log(f"  匹配到 {len(matches)} 个专案:")
+                for proj, info in sorted(matches.items()):
+                    tag = []
+                    if info["pictures"]:
+                        tag.append("有图片")
+                    if info["eoldata"]:
+                        tag.append("有测试/生产数据")
+                    log(f"    {proj.upper():8s} {'+'.join(tag)}")
             for proj in gp.list_projects():
                 try:
                     eol = gp.eol_by_sn(sn, proj)
