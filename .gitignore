@@ -32,6 +32,8 @@ run.log
 # Oracle 直连部署包:解密连接含内网密码,禁止上传;依赖/运行产物也不入库
 /sn_report/package_oracle_verify/oracle_download/conns.json
 /sn_report/.patch_baseline.json
+/sn_report/package_oracle_verify/python/
+/sn_report/package_oracle_verify/.venv_ok
 *.pptx
 
 # 工具安装包

@@ -102,10 +102,15 @@ python package_oracle_verify.py      :: 生成 package_oracle_verify\ 部署包
 `package_oracle_verify\oracle_download\conns.json`(或让管理员提供)。
 
 然后双击 `run_verify.bat`:
-自动解压 Instant Client(Windows x64 19.13)→ 离线安装 wheels(oracledb)→
+自动解压便携 Python 3.11(免安装,不依赖系统 Python)→ 解压 Instant Client
+(Windows x64 19.13)→ 离线安装 wheels(oracledb/PyQt5)→
 弹出 Rayprush 一账通登录验证(10.151.128.45:8081,验证通过才继续)→
 读 `sns.txt` 逐 SN 查询下载 → 输出 `oracle_download\output\oracle_verify\<时间戳>\`
 (verify.json + run.log)与 `downloads\`。
+
+**台式机不再需要安装 Python**:便携版随包提供,首次运行自动解压。
+要求 Windows 10 1803+ 或 Windows 11(自带 `tar` 命令;更老的系统
+需手动把便携 Python 解压到 `package_oracle_verify\python\`)。
 
 ### 后续迭代(增量补丁,不再整包)
 
