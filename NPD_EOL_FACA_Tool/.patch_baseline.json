@@ -1,0 +1,11 @@
+{
+  "files": {
+    "run_oracle_download.py": "58ec5b96649ba9bbbb66347db86a3ea36c9729676f63fcb175a19ff9bf03febd",
+    "lib/oracle_client.py": "17790d0a3b256552c38a782f79eeb0b6c8bab3c29d17a148071e45b41eaa2269",
+    "lib/config.py": "578bb18fe3479d868354c2cdab9abceed76d99046ae2ed9acdee42d8ace8a9ee",
+    "lib/__init__.py": "72bc0d22618493c4f987a316bf1eefdb824759b579f1394cb17ccc645225bb82",
+    "lib/login_dialog.py": "7b956230706b7cd4d2ef7aee1f9049c8fa93d271d2ba6b5dfe5791c1a610dbf9",
+    "lib/rayprush_auth.py": "d28149bbe416e70ee018f4ad4802536489e87c86f8ff070c34f93d9d4c36570b"
+  },
+  "last_patch": "20260811_162303"
+}

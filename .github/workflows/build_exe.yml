@@ -9,22 +9,21 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.10
+      - name: Setup Python 3.11 x64
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
+          architecture: x64
 
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
-          python -m pip install -r sn_report\requirements.txt
+          python -m pip install -r NPD_EOL_FACA_Tool\requirements.txt
 
       - name: Build onedir exe
         shell: pwsh
@@ -32,41 +31,29 @@ jobs:
           $repo = (Get-Location).Path
           python -m PyInstaller --noconfirm --clean --onedir --windowed `
             --name SN_Report `
-            --paths sn_report `
-            --icon "$repo\sn_report\favicon.ico" `
-            --add-data "$repo\sn_report\favicon.ico;." `
+            --paths NPD_EOL_FACA_Tool `
+            --icon "$repo\NPD_EOL_FACA_Tool\favicon.ico" `
+            --add-data "$repo\NPD_EOL_FACA_Tool\favicon.ico;." `
             --hidden-import pg8000.native `
             --hidden-import scramp `
             --hidden-import gp_gui `
             --hidden-import apple_style `
-            --hidden-import openpyxl `
             --hidden-import excel_report `
+            --hidden-import openpyxl `
+            --hidden-import sfc_app007 `
+            --hidden-import sn_info `
+            --hidden-import commonality_data `
+            --hidden-import commonality_analysis `
+            --hidden-import commonality_ppt `
             --collect-submodules PyQt5 `
             --distpath dist `
             --workpath build `
             --specpath build `
-            sn_report\gp_gui.py
+            NPD_EOL_FACA_Tool\gp_gui.py
 
-      - name: Package release zip
-        shell: pwsh
-        run: |
-          Compress-Archive -Path dist\SN_Report\* -DestinationPath dist\SN_Report_Windows.zip -Force
-          Get-ChildItem dist
-
-      - name: Show output
-        shell: pwsh
-        run: |
-          Get-ChildItem dist -Recurse | Select-Object -First 20 FullName
-
-      - name: Upload artifact
+      - name: Upload artifact (整个目录, 含 _internal)
         uses: actions/upload-artifact@v4
         with:
           name: SN_Report_Windows
           path: dist/SN_Report
           compression-level: 9
-
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/SN_Report_Windows.zip

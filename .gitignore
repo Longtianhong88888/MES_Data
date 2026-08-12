@@ -24,6 +24,26 @@ sn_report/sns.txt
 debug_run.txt
 run.log
 
+# 新目录名 NPD_EOL_FACA_Tool(原 sn_report)
+NPD_EOL_FACA_Tool/config.json
+NPD_EOL_FACA_Tool/sns.txt
+NPD_EOL_FACA_Tool/run_gp.log
+NPD_EOL_FACA_Tool/output/
+NPD_EOL_FACA_Tool/downloads/
+NPD_EOL_FACA_Tool/patches/
+NPD_EOL_FACA_Tool/package_oracle_verify/instantclient/
+NPD_EOL_FACA_Tool/package_oracle_verify/oracle_download/conns.json
+NPD_EOL_FACA_Tool/package_oracle_verify/oracle_download/output/
+NPD_EOL_FACA_Tool/package_oracle_verify/oracle_download/downloads/
+NPD_EOL_FACA_Tool/package_oracle_verify/.applied_patches.json
+NPD_EOL_FACA_Tool/build/
+NPD_EOL_FACA_Tool/dist/
+NPD_EOL_FACA_Tool/*.spec
+
+# 本地记忆 / 密钥 / 第三方工具(禁止上传)
+PROJECT_MEMORY_*.md
+tools/
+
 # 离线依赖与公司内部解包内容(体积大且含内部代码/凭据,默认不上传)
 /lib/
 /reference/

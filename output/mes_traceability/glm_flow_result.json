@@ -1,4 +1,0 @@
-{
-  "kind": "flow",
-  "text": "### 1. 完整制程顺序（按区域分组，区分Auto与Manual工序）  \n- **SMT Class 100k (FOL初始工序，自动为主)**  \n  - HTCC Load (Auto)  \n  - Screen Print (Auto)  \n  - Component P&P (Auto)  \n  - Reflow+AOI (Auto)  \n  - X-ray (Auto)  \n  - SMT flux clean (Auto)  \n  - HTCC to transfer tray (Auto)  \n  - HTCC loading (Auto)  \n  - Substrate plasma (Process)  \n\n- **FOL Class"
-}

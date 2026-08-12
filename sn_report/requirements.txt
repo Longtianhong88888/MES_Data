@@ -1,7 +1,0 @@
-# SN_Report 运行时依赖(打包与运行共用)
-PyQt5
-pg8000
-scramp
-openpyxl
-Pillow
-et-xmlfile
